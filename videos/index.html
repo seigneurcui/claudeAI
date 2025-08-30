@@ -1,0 +1,1128 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title data-i18n="title">批量影片字幕生成器</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans&family=Noto+Sans+SC&family=Noto+Sans+TC&family=Noto+Sans+JP&family=Noto+Sans+KR&family=Noto+Sans+Devanagari&family=Noto+Sans+Thai&display=swap" rel="stylesheet">
+  <style>
+    body { 
+      font-family: 'Noto Sans', 'Noto Sans SC', 'Noto Sans TC', 'Noto Sans JP', 'Noto Sans KR', 'Noto Sans Devanagari', 'Noto Sans Thai', sans-serif; 
+      max-width: 900px; 
+      margin: 2em auto; 
+      line-height: 1.6; 
+      padding: 0 20px;
+      background-color: #f5f5f5;
+    }
+    .container { 
+      background: white;
+      border: 1px solid #ddd; 
+      padding: 30px; 
+      border-radius: 12px; 
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    h1, h2 { text-align: center; color: #333; }
+    h1 { margin-bottom: 10px; }
+    .subtitle { text-align: center; color: #666; margin-bottom: 30px; }
+    #languageSelect {
+      display: block;
+      margin: 0 auto 20px;
+      padding: 8px;
+      font-size: 16px;
+      border-radius: 6px;
+      width: 200px;
+    }
+    .file-upload-wrapper {
+      margin: 1.5em 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    input[type="file"] { 
+      display: none;
+    }
+    button[data-i18n="browse"] {
+      padding: 10px 20px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button[data-i18n="browse"]:hover {
+      background-color: #0056b3;
+    }
+    #file-status {
+      color: #666;
+    }
+    button { 
+      padding: 12px 20px; 
+      background-color: #007bff; 
+      color: white; 
+      border: none; 
+      border-radius: 6px; 
+      cursor: pointer; 
+      font-size: 16px;
+      margin: 5px;
+    }
+    button:hover { background-color: #0056b3; }
+    button:disabled { 
+      background-color: #6c757d; 
+      cursor: not-allowed; 
+    }
+    #status-container { 
+      background: white;
+      padding: 25px; 
+      border-radius: 12px; 
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    #status-container p { margin: 0.8em 0; }
+    .status-item { 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #eee;
+    }
+    .status-item:last-child { border-bottom: none; }
+    .status-value { 
+      font-weight: bold; 
+      color: #007bff; 
+    }
+    .upload-status { 
+      margin-top: 15px; 
+      padding: 10px; 
+      border-radius: 6px; 
+      text-align: center;
+    }
+    .upload-status.success { background-color: #d4edda; color: #155724; }
+    .upload-status.error { background-color: #f8d7da; color: #721c24; }
+    .upload-status.info { background-color: #cce7ff; color: #004085; }
+    .progress-section {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #f8f9fa;
+      border-radius: 8px;
+      border-left: 4px solid #007bff;
+    }
+    .current-file {
+      font-weight: bold;
+      color: #007bff;
+      margin-bottom: 10px;
+    }
+    .progress-step {
+      margin: 5px 0;
+      font-size: 14px;
+    }
+    #completed-videos-section {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #f8f9fa;
+      border-radius: 8px;
+    }
+    #completed-videos-section table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    #completed-videos-section th, #completed-videos-section td {
+      padding: 10px;
+      border: 1px solid #ddd;
+      text-align: left;
+    }
+    #completed-videos-section th {
+      background-color: #007bff;
+      color: white;
+    }
+    #completed-videos-section tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+    #completed-videos-section tr:hover {
+      background-color: #f1f1f1;
+    }
+    .subtitle-settings {
+      margin: 1.5em 0;
+      padding: 15px;
+      background-color: #f8f9fa;
+      border-radius: 8px;
+      border-left: 4px solid #007bff;
+    }
+    .subtitle-language {
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .subtitle-language label {
+      font-weight: bold;
+      color: #333;
+      min-width: 100px;
+    }
+    .subtitle-language select, .subtitle-language input[type="number"], .subtitle-language input[type="color"] {
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 16px;
+    }
+    .subtitle-language input[type="number"] {
+      width: 80px;
+    }
+    .subtitle-language input[type="color"] {
+      width: 50px;
+      height: 30px;
+      padding: 2px;
+    }
+    #subtitle-order {
+      margin-top: 15px;
+      padding: 10px;
+      background-color: #fff;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+    }
+    .order-item {
+      padding: 10px;
+      background-color: #007bff;
+      color: white;
+      border-radius: 6px;
+      margin: 5px;
+      cursor: move;
+      display: inline-block;
+      user-select: none;
+    }
+    .order-item.dragging {
+      opacity: 0.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <select id="languageSelect">
+      <option value="en">English</option>
+      <option value="fr">Français</option>
+      <option value="es">Español</option>
+      <option value="de">Deutsch</option>
+      <option value="it">Italiano</option>
+      <option value="zh-CN">简体中文</option>
+      <option value="zh-TW" selected>繁體中文</option>
+      <option value="ja">日本語</option>
+      <option value="ko">한국어</option>
+      <option value="hi">हिन्दी</option>
+      <option value="th">ไทย</option>
+    </select>
+    <h1 data-i18n="title">批量影片字幕生成器</h1>
+    <p class="subtitle" data-i18n="subtitle">選擇多個影片檔案，自動生成中文、英文和法文字幕</p>
+    <div class="file-upload-wrapper">
+      <input type="file" id="video-files" accept="video/*" multiple>
+      <button data-i18n="browse">瀏覽</button>
+      <span id="file-status" data-i18n="noFilesSelected">無檔案選擇</span>
+    </div>
+    <div class="subtitle-settings">
+      <h2 data-i18n="subtitleSettings">字幕設定</h2>
+      <div class="subtitle-language">
+        <label data-i18n="zhLabel">中文</label>
+        <select id="zh-font">
+          <option value="Noto Sans TC">Noto Sans TC</option>
+          <option value="Arial">Arial</option>
+          <option value="Times New Roman">Times New Roman</option>
+          <option value="Noto Sans SC">Noto Sans SC</option>
+          <option value="Noto Sans JP">Noto Sans JP</option>
+          <option value="Noto Sans KR">Noto Sans KR</option>
+        </select>
+        <label data-i18n="sizeLabel">字體大小</label>
+        <input type="number" id="zh-size" min="10" max="48" step="2" value="24">
+        <label data-i18n="colorLabel">顏色</label>
+        <input type="color" id="zh-color" value="#FFFF00">
+      </div>
+      <div class="subtitle-language">
+        <label data-i18n="enLabel">英文</label>
+        <select id="en-font">
+          <option value="Arial">Arial</option>
+          <option value="Noto Sans TC">Noto Sans TC</option>
+          <option value="Times New Roman">Times New Roman</option>
+          <option value="Noto Sans SC">Noto Sans SC</option>
+          <option value="Noto Sans JP">Noto Sans JP</option>
+          <option value="Noto Sans KR">Noto Sans KR</option>
+        </select>
+        <label data-i18n="sizeLabel">字體大小</label>
+        <input type="number" id="en-size" min="10" max="48" step="2" value="20">
+        <label data-i18n="colorLabel">顏色</label>
+        <input type="color" id="en-color" value="#FFFFFF">
+      </div>
+      <div class="subtitle-language">
+        <label data-i18n="frLabel">法文</label>
+        <select id="fr-font">
+          <option value="Times New Roman">Times New Roman</option>
+          <option value="Noto Sans TC">Noto Sans TC</option>
+          <option value="Arial">Arial</option>
+          <option value="Noto Sans SC">Noto Sans SC</option>
+          <option value="Noto Sans JP">Noto Sans JP</option>
+          <option value="Noto Sans KR">Noto Sans KR</option>
+        </select>
+        <label data-i18n="sizeLabel">字體大小</label>
+        <input type="number" id="fr-size" min="10" max="48" step="2" value="20">
+        <label data-i18n="colorLabel">顏色</label>
+        <input type="color" id="fr-color" value="#00FFFF">
+      </div>
+      <div id="subtitle-order">
+        <label data-i18n="orderLabel">字幕排列順序（拖曳調整）</label>
+        <div id="order-list">
+          <div class="order-item" draggable="true" data-lang="zh" data-i18n="zhLabel">中文</div>
+          <div class="order-item" draggable="true" data-lang="en" data-i18n="enLabel">英文</div>
+          <div class="order-item" draggable="true" data-lang="fr" data-i18n="frLabel">法文</div>
+        </div>
+      </div>
+    </div>
+    <div style="text-align: center;">
+      <button onclick="uploadVideos()" id="upload-btn" data-i18n="uploadButton">📤 上傳並開始處理</button>
+    </div>
+    <div id="upload-status-container"></div>
+  </div>
+
+  <div id="status-container">
+    <h2 data-i18n="statusTitle">📊 處理狀態</h2>
+    <div class="status-item">
+      <span data-i18n="queueLabel"><strong>隊列中的影片：</strong></span>
+      <span class="status-value" id="queue-count">0</span>
+    </div>
+    <div class="status-item">
+      <span data-i18n="pendingLabel"><strong>待處理檔案：</strong></span>
+      <span class="status-value" id="pending-count">0</span>
+    </div>
+    <div class="status-item">
+      <span data-i18n="completedLabel"><strong>已完成影片：</strong></span>
+      <span class="status-value" id="completed-count">0</span>
+    </div>
+    <div class="status-item">
+      <span data-i18n="processingLabel"><strong>處理狀態：</strong></span>
+      <span class="status-value" id="processing-status">空閒</span>
+    </div>
+    <div id="progress-section" class="progress-section" style="display: none;">
+      <div class="current-file" id="current-file"></div>
+      <div class="progress-step" id="progress-step"></div>
+    </div>
+    <div id="completed-videos-section">
+      <h2 data-i18n="completedTitle">📋 已完成影片</h2>
+      <table id="completed-videos-table">
+        <thead>
+          <tr>
+            <th data-i18n="tableOriginalFile">原始檔案</th>
+            <th data-i18n="tableNewFile">新檔案</th>
+            <th data-i18n="tableDuration">轉換耗時（秒）</th>
+          </tr>
+        </thead>
+        <tbody id="completed-videos-body"></tbody>
+      </table>
+      <div style="text-align: center; margin-top: 20px;">
+        <button onclick="exportToExcel()" data-i18n="exportButton">📥 匯出為 Excel</button>
+      </div>
+    </div>
+    <div style="text-align: center; margin-top: 20px;">
+      <button onclick="fetchStatus()" data-i18n="refreshButton">🔄 刷新狀態</button>
+    </div>
+  </div>
+
+  <script>
+    const translations = {
+      en: {
+        title: "Batch Video Subtitle Generator",
+        subtitle: "Select multiple video files to automatically generate Chinese, English, and French subtitles",
+        uploadButton: "📤 Upload and Start Processing",
+        statusTitle: "📊 Processing Status",
+        queueLabel: "Videos in Queue:",
+        pendingLabel: "Pending Files:",
+        completedLabel: "Completed Videos:",
+        completedTitle: "📋 Completed Videos",
+        processingLabel: "Processing Status:",
+        tableOriginalFile: "Original File",
+        tableNewFile: "New File",
+        tableDuration: "Processing Time (seconds)",
+        exportButton: "📥 Export to Excel",
+        refreshButton: "🔄 Refresh Status",
+        noData: "No completed videos yet",
+        browse: "Browse",
+        noFilesSelected: "No files selected",
+        uploadSelect: "Please select video files to upload",
+        uploadProcessing: "Uploading {count} file(s)...",
+        uploadSuccess: "Upload successful",
+        uploadError: "Upload failed, please try again",
+        exportNoData: "No data to export",
+        exportSuccess: "Completed videos list exported",
+        statusError: "Failed to fetch status",
+        processingIdle: "Idle",
+        processingQueue: "Waiting in queue",
+        progress_starting: "🚀 Starting processing...",
+        progress_extracting_audio: "🎵 Extracting audio...",
+        progress_transcribing: "📝 Transcribing audio to text...",
+        progress_translating_en: "🌍 Translating to English...",
+        progress_translating_fr: "🇫🇷 Translating to French...",
+        progress_merging_subtitles: "🎬 Merging subtitles into video...",
+        progress_generic: "📊 Processing... ({progress}%)",
+        subtitleSettings: "Subtitle Settings",
+        zhLabel: "Chinese",
+        enLabel: "English",
+        frLabel: "French",
+        sizeLabel: "Font Size",
+        colorLabel: "Color",
+        orderLabel: "Subtitle Order (Drag to Adjust)"
+      },
+      fr: {
+        title: "Générateur de sous-titres vidéo en lot",
+        subtitle: "Sélectionnez plusieurs fichiers vidéo pour générer automatiquement des sous-titres en chinois, anglais et français",
+        uploadButton: "📤 Télécharger et commencer le traitement",
+        statusTitle: "📊 État du traitement",
+        queueLabel: "Vidéos en file d'attente :",
+        pendingLabel: "Fichiers en attente :",
+        completedLabel: "Vidéos terminées :",
+        processingLabel: "État du traitement :",
+        tableOriginalFile: "Fichier original",
+        tableNewFile: "Nouveau fichier",
+        tableDuration: "Temps de traitement (secondes)",
+        exportButton: "📥 Exporter vers Excel",
+        refreshButton: "🔄 Actualiser l'état",
+        noData: "Aucune vidéo terminée pour le moment",
+        browse: "Parcourir",
+        noFilesSelected: "Aucun fichier sélectionné",
+        uploadSelect: "Veuillez sélectionner des fichiers vidéo à télécharger",
+        uploadProcessing: "Téléchargement de {count} fichier(s)...",
+        uploadSuccess: "Téléchargement réussi",
+        uploadError: "Échec du téléchargement, veuillez réessayer",
+        exportNoData: "Aucune donnée à exporter",
+        exportSuccess: "Liste des vidéos terminées exportée",
+        statusError: "Échec de la récupération de l'état",
+        processingIdle: "Inactif",
+        processingQueue: "En attente dans la file",
+        progress_starting: "🚀 Début du traitement...",
+        progress_extracting_audio: "🎵 Extraction de l'audio...",
+        progress_transcribing: "📝 Transcription de l'audio en texte...",
+        progress_translating_en: "🌍 Traduction en anglais...",
+        progress_translating_fr: "🇫🇷 Traduction en français...",
+        progress_merging_subtitles: "🎬 Fusion des sous-titres dans la vidéo...",
+        progress_generic: "📊 Traitement... ({progress}%)",
+        subtitleSettings: "Paramètres des sous-titres",
+        zhLabel: "Chinois",
+        enLabel: "Anglais",
+        frLabel: "Français",
+        sizeLabel: "Taille de la police",
+        colorLabel: "Couleur",
+        orderLabel: "Ordre des sous-titres (Glisser pour ajuster)"
+      },
+      es: {
+        title: "Generador de subtítulos de video en lote",
+        subtitle: "Seleccione varios archivos de video para generar automáticamente subtítulos en chino, inglés y francés",
+        uploadButton: "📤 Subir y comenzar el procesamiento",
+        statusTitle: "📊 Estado del procesamiento",
+        queueLabel: "Videos en cola:",
+        pendingLabel: "Archivos pendientes:",
+        completedLabel: "Videos completados:",
+        processingLabel: "Estado del procesamiento:",
+        tableOriginalFile: "Archivo original",
+        tableNewFile: "Nuevo archivo",
+        tableDuration: "Tiempo de procesamiento (segundos)",
+        exportButton: "📥 Exportar a Excel",
+        refreshButton: "🔄 Actualizar estado",
+        noData: "Aún no hay videos completados",
+        browse: "Examinar",
+        noFilesSelected: "No se han seleccionado archivos",
+        uploadSelect: "Por favor, seleccione archivos de video para subir",
+        uploadProcessing: "Subiendo {count} archivo(s)...",
+        uploadSuccess: "Subida exitosa",
+        uploadError: "Fallo en la subida, por favor intenta de nuevo",
+        exportNoData: "No hay datos para exportar",
+        exportSuccess: "Lista de videos completados exportada",
+        statusError: "Error al obtener el estado",
+        processingIdle: "Inactivo",
+        processingQueue: "Esperando en la cola",
+        progress_starting: "🚀 Iniciando procesamiento...",
+        progress_extracting_audio: "🎵 Extrayendo audio...",
+        progress_transcribing: "📝 Transcribiendo audio a texto...",
+        progress_translating_en: "🌍 Traduciendo al inglés...",
+        progress_translating_fr: "🇫🇷 Traduciendo al francés...",
+        progress_merging_subtitles: "🎬 Fusionando subtítulos en el video...",
+        progress_generic: "📊 Procesando... ({progress}%)",
+        subtitleSettings: "Configuración de subtítulos",
+        zhLabel: "Chino",
+        enLabel: "Inglés",
+        frLabel: "Francés",
+        sizeLabel: "Tamaño de fuente",
+        colorLabel: "Color",
+        orderLabel: "Orden de subtítulos (Arrastrar para ajustar)"
+      },
+      de: {
+        title: "Stapel-Video-Untertitel-Generator",
+        subtitle: "Wählen Sie mehrere Videodateien aus, um automatisch Untertitel in Chinesisch, Englisch und Französisch zu generieren",
+        uploadButton: "📤 Hochladen und Verarbeitung starten",
+        statusTitle: "📊 Verarbeitungsstatus",
+        queueLabel: "Videos in der Warteschlange:",
+        pendingLabel: "Ausstehende Dateien:",
+        completedLabel: "Abgeschlossene Videos:",
+        processingLabel: "Verarbeitungsstatus:",
+        tableOriginalFile: "Originaldatei",
+        tableNewFile: "Neue Datei",
+        tableDuration: "Verarbeitungszeit (Sekunden)",
+        exportButton: "📥 Nach Excel exportieren",
+        refreshButton: "🔄 Status aktualisieren",
+        noData: "Noch keine abgeschlossenen Videos",
+        browse: "Durchsuchen",
+        noFilesSelected: "Keine Dateien ausgewählt",
+        uploadSelect: "Bitte wählen Sie Videodateien zum Hochladen aus",
+        uploadProcessing: "Hochladen von {count} Datei(en)...",
+        uploadSuccess: "Hochladen erfolgreich",
+        uploadError: "Hochladen fehlgeschlagen, bitte versuchen Sie es erneut",
+        exportNoData: "Keine Daten zum Exportieren",
+        exportSuccess: "Liste der abgeschlossenen Videos exportiert",
+        statusError: "Fehler beim Abrufen des Status",
+        processingIdle: "Inaktiv",
+        processingQueue: "In der Warteschlange",
+        progress_starting: "🚀 Verarbeitung starten...",
+        progress_extracting_audio: "🎵 Audio extrahieren...",
+        progress_transcribing: "📝 Audio in Text umwandeln...",
+        progress_translating_en: "🌍 In Englisch übersetzen...",
+        progress_translating_fr: "🇫🇷 In Französisch übersetzen...",
+        progress_merging_subtitles: "🎬 Untertitel in Video einfügen...",
+        progress_generic: "📊 Verarbeiten... ({progress}%)",
+        subtitleSettings: "Untertitel-Einstellungen",
+        zhLabel: "Chinesisch",
+        enLabel: "Englisch",
+        frLabel: "Französisch",
+        sizeLabel: "Schriftgröße",
+        colorLabel: "Farbe",
+        orderLabel: "Untertitel-Reihenfolge (Ziehen zum Anpassen)"
+      },
+      it: {
+        title: "Generatore di sottotitoli video in batch",
+        subtitle: "Seleziona più file video per generare automaticamente sottotitoli in cinese, inglese e francese",
+        uploadButton: "📤 Carica e avvia l'elaborazione",
+        statusTitle: "📊 Stato dell'elaborazione",
+        queueLabel: "Video in coda:",
+        pendingLabel: "File in attesa:",
+        completedLabel: "Video completati:",
+        processingLabel: "Stato dell'elaborazione:",
+        tableOriginalFile: "File originale",
+        tableNewFile: "Nuovo file",
+        tableDuration: "Tempo di elaborazione (secondi)",
+        exportButton: "📥 Esporta in Excel",
+        refreshButton: "🔄 Aggiorna stato",
+        noData: "Nessun video completato finora",
+        browse: "Sfoglia",
+        noFilesSelected: "Nessun file selezionato",
+        uploadSelect: "Seleziona i file video da caricare",
+        uploadProcessing: "Caricamento di {count} file...",
+        uploadSuccess: "Caricamento completato",
+        uploadError: "Caricamento fallito, riprova",
+        exportNoData: "Nessun dato da esportare",
+        exportSuccess: "Elenco dei video completati esportato",
+        statusError: "Errore nel recupero dello stato",
+        processingIdle: "Inattivo",
+        processingQueue: "In attesa nella coda",
+        progress_starting: "🚀 Avvio dell'elaborazione...",
+        progress_extracting_audio: "🎵 Estrazione audio...",
+        progress_transcribing: "📝 Trascrizione audio in testo...",
+        progress_translating_en: "🌍 Traduzione in inglese...",
+        progress_translating_fr: "🇫🇷 Traduzione in francese...",
+        progress_merging_subtitles: "🎬 Incorporamento dei sottotitoli nel video...",
+        progress_generic: "📊 Elaborazione... ({progress}%)",
+        subtitleSettings: "Impostazioni dei sottotitoli",
+        zhLabel: "Cinese",
+        enLabel: "Inglese",
+        frLabel: "Francese",
+        sizeLabel: "Dimensione del carattere",
+        colorLabel: "Colore",
+        orderLabel: "Ordine dei sottotitoli (Trascina per regolare)"
+      },
+      'zh-CN': {
+        title: "批量视频字幕生成器",
+        subtitle: "选择多个视频文件，自动生成中文、英文和法文字幕",
+        uploadButton: "📤 上传并开始处理",
+        statusTitle: "📊 处理状态",
+        queueLabel: "队列中的视频：",
+        pendingLabel: "待处理文件：",
+        completedLabel: "已完成视频：",
+        processingLabel: "处理状态：",
+        tableOriginalFile: "原始文件",
+        tableNewFile: "新文件",
+        tableDuration: "处理耗时（秒）",
+        exportButton: "📥 导出为 Excel",
+        refreshButton: "🔄 刷新状态",
+        noData: "暂无已完成视频",
+        browse: "浏览",
+        noFilesSelected: "无文件选择",
+        uploadSelect: "请选择要上传的视频文件",
+        uploadProcessing: "正在上传 {count} 个文件...",
+        uploadSuccess: "上传成功",
+        uploadError: "上传失败，请重试",
+        exportNoData: "暂无数据可导出",
+        exportSuccess: "已导出完成视频列表",
+        statusError: "状态获取失败",
+        processingIdle: "空闲",
+        processingQueue: "队列等待中",
+        progress_starting: "🚀 开始处理...",
+        progress_extracting_audio: "🎵 提取音频...",
+        progress_transcribing: "📝 语音转文字...",
+        progress_translating_en: "🌍 翻译成英文...",
+        progress_translating_fr: "🇫🇷 翻译成法文...",
+        progress_merging_subtitles: "🎬 合并字幕到视频...",
+        progress_generic: "📊 处理中... ({progress}%)",
+        subtitleSettings: "字幕设置",
+        zhLabel: "中文",
+        enLabel: "英文",
+        frLabel: "法文",
+        sizeLabel: "字体大小",
+        colorLabel: "颜色",
+        orderLabel: "字幕排列顺序（拖动调整）"
+      },
+      'zh-TW': {
+        title: "批量影片字幕生成器",
+        subtitle: "選擇多個影片檔案，自動生成中文、英文和法文字幕",
+        uploadButton: "📤 上傳並開始處理",
+        statusTitle: "📊 處理狀態",
+        queueLabel: "隊列中的影片：",
+        pendingLabel: "待處理檔案：",
+        completedLabel: "已完成影片：",
+        processingLabel: "處理狀態：",
+        tableOriginalFile: "原始檔案",
+        tableNewFile: "新檔案",
+        tableDuration: "轉換耗時（秒）",
+        exportButton: "📥 匯出為 Excel",
+        refreshButton: "🔄 刷新狀態",
+        noData: "暫無已完成影片",
+        browse: "瀏覽",
+        noFilesSelected: "無檔案選擇",
+        uploadSelect: "請選擇要上傳的影片檔案",
+        uploadProcessing: "正在上傳 {count} 個檔案...",
+        uploadSuccess: "上傳成功",
+        uploadError: "上傳失敗，請重試",
+        exportNoData: "暫無資料可匯出",
+        exportSuccess: "已匯出完成影片列表",
+        statusError: "狀態獲取失敗",
+        processingIdle: "空閒",
+        processingQueue: "隊列等待中",
+        progress_starting: "🚀 開始處理...",
+        progress_extracting_audio: "🎵 提取音頻...",
+        progress_transcribing: "📝 語音轉文字...",
+        progress_translating_en: "🌍 翻譯成英文...",
+        progress_translating_fr: "🇫🇷 翻譯成法文...",
+        progress_merging_subtitles: "🎬 合併字幕到影片...",
+        progress_generic: "📊 處理中... ({progress}%)",
+        subtitleSettings: "字幕設定",
+        zhLabel: "中文",
+        enLabel: "英文",
+        frLabel: "法文",
+        sizeLabel: "字體大小",
+        colorLabel: "顏色",
+        orderLabel: "字幕排列順序（拖曳調整）"
+      },
+      ja: {
+        title: "バッチビデオ字幕ジェネレーター",
+        subtitle: "複数のビデオファイルを選択して、中国語、英語、フランス語の字幕を自動生成",
+        uploadButton: "📤 アップロードして処理開始",
+        statusTitle: "📊 処理状態",
+        queueLabel: "キュー内のビデオ：",
+        pendingLabel: "保留中のファイル：",
+        completedLabel: "完了したビデオ：",
+        processingLabel: "処理状態：",
+        tableOriginalFile: "元のファイル",
+        tableNewFile: "新しいファイル",
+        tableDuration: "処理時間（秒）",
+        exportButton: "📥 Excelにエクスポート",
+        refreshButton: "🔄 状態を更新",
+        noData: "まだ完了したビデオはありません",
+        browse: "参照",
+        noFilesSelected: "ファイルが選択されていません",
+        uploadSelect: "アップロードするビデオファイルを選択してください",
+        uploadProcessing: "{count} ファイルのアップロード中...",
+        uploadSuccess: "アップロード成功",
+        uploadError: "アップロードに失敗しました、再度お試しください",
+        exportNoData: "エクスポートするデータがありません",
+        exportSuccess: "完了したビデオリストをエクスポートしました",
+        statusError: "状態の取得に失敗しました",
+        processingIdle: "アイドル",
+        processingQueue: "キューで待機中",
+        progress_starting: "🚀 処理を開始...",
+        progress_extracting_audio: "🎵 オーディオを抽出...",
+        progress_transcribing: "📝 音声をテキストに変換...",
+        progress_translating_en: "🌍 英語に翻訳...",
+        progress_translating_fr: "🇫🇷 フランス語に翻訳...",
+        progress_merging_subtitles: "🎬 字幕をビデオに統合...",
+        progress_generic: "📊 処理中... ({progress}%)",
+        subtitleSettings: "字幕設定",
+        zhLabel: "中国語",
+        enLabel: "英語",
+        frLabel: "フランス語",
+        sizeLabel: "フォントサイズ",
+        colorLabel: "色",
+        orderLabel: "字幕の順序（ドラッグして調整）"
+      },
+      ko: {
+        title: "일괄 비디오 자막 생성기",
+        subtitle: "여러 비디오 파일을 선택하여 중국어, 영어, 프랑스어 자막을 자동 생성",
+        uploadButton: "📤 업로드 및 처리 시작",
+        statusTitle: "📊 처리 상태",
+        queueLabel: "대기열의 비디오:",
+        pendingLabel: "대기 중인 파일:",
+        completedLabel: "완료된 비디오:",
+        processingLabel: "처리 상태:",
+        tableOriginalFile: "원본 파일",
+        tableNewFile: "새 파일",
+        tableDuration: "처리 시간(초)",
+        exportButton: "📥 Excel로 내보내기",
+        refreshButton: "🔄 상태 새로고침",
+        noData: "아직 완료된 비디오가 없습니다",
+        browse: "찾아보기",
+        noFilesSelected: "선택된 파일 없음",
+        uploadSelect: "업로드할 비디오 파일을 선택하세요",
+        uploadProcessing: "{count}개 파일 업로드 중...",
+        uploadSuccess: "업로드 성공",
+        uploadError: "업로드 실패, 다시 시도하세요",
+        exportNoData: "내보낼 데이터가 없습니다",
+        exportSuccess: "완료된 비디오 목록이 내보내졌습니다",
+        statusError: "상태를 가져오지 못했습니다",
+        processingIdle: "유휴",
+        processingQueue: "대기열에서 대기 중",
+        progress_starting: "🚀 처리 시작...",
+        progress_extracting_audio: "🎵 오디오 추출...",
+        progress_transcribing: "📝 음성을 텍스트로 변환...",
+        progress_translating_en: "🌍 영어로 번역...",
+        progress_translating_fr: "🇫🇷 프랑스어로 번역...",
+        progress_merging_subtitles: "🎬 자막을 비디오에 통합...",
+        progress_generic: "📊 처리 중... ({progress}%)",
+        subtitleSettings: "자막 설정",
+        zhLabel: "중국어",
+        enLabel: "영어",
+        frLabel: "프랑스어",
+        sizeLabel: "글꼴 크기",
+        colorLabel: "색상",
+        orderLabel: "자막 순서 (드래그하여 조정)"
+      },
+      hi: {
+        title: "बैच वीडियो उपशीर्षक जनरेटर",
+        subtitle: "कई वीडियो फ़ाइलों का चयन करें ताकि चीनी, अंग्रेजी और फ्रेंच उपशीर्षक स्वचालित रूप से उत्पन्न हो",
+        uploadButton: "📤 अपलोड करें और प्रोसेसिंग शुरू करें",
+        statusTitle: "📊 प्रोसेसिंग स्थिति",
+        queueLabel: "कतार में वीडियो:",
+        pendingLabel: "लंबित फ़ाइलें:",
+        completedLabel: "पूर्ण किए गए वीडियो:",
+        processingLabel: "प्रोसेसिंग स्थिति:",
+        tableOriginalFile: "मूल फ़ाइल",
+        tableNewFile: "नई फ़ाइल",
+        tableDuration: "प्रोसेसिंग समय (सेकंड)",
+        exportButton: "📥 Excel में निर्यात करें",
+        refreshButton: "🔄 स्थिति ताज़ा करें",
+        noData: "अभी तक कोई पूर्ण वीडियो नहीं",
+        browse: "ब्राउज़ करें",
+        noFilesSelected: "कोई फ़ाइल चयनित नहीं",
+        uploadSelect: "कृपया अपलोड करने के लिए वीडियो फ़ाइलें चुनें",
+        uploadProcessing: "{count} फ़ाइल(ें) अपलोड हो रही हैं...",
+        uploadSuccess: "अपलोड सफल",
+        uploadError: "अपलोड विफल, कृपया पुनः प्रयास करें",
+        exportNoData: "निर्यात करने के लिए कोई डेटा नहीं",
+        exportSuccess: "पूर्ण वीडियो सूची निर्यात की गई",
+        statusError: "स्थिति प्राप्त करने में विफल",
+        processingIdle: "निष्क्रिय",
+        processingQueue: "कतार में प्रतीक्षा",
+        progress_starting: "🚀 प्रोसेसिंग शुरू...",
+        progress_extracting_audio: "🎵 ऑडियो निकाल रहा है...",
+        progress_transcribing: "📝 ऑडियो को टेक्स्ट में परिवर्तित कर रहा है...",
+        progress_translating_en: "🌍 अंग्रेजी में अनुवाद...",
+        progress_translating_fr: "🇫🇷 फ्रेंच में अनुवाद...",
+        progress_merging_subtitles: "🎬 उपशीर्षक को वीडियो में मर्ज कर रहा है...",
+        progress_generic: "📊 प्रोसेसिंग... ({progress}%)",
+        subtitleSettings: "उपशीर्षक सेटिंग्स",
+        zhLabel: "चीनी",
+        enLabel: "अंग्रेजी",
+        frLabel: "फ्रेंच",
+        sizeLabel: "फ़ॉन्ट आकार",
+        colorLabel: "रंग",
+        orderLabel: "उपशीर्षक क्रम (खींचकर समायोजित करें)"
+      },
+      th: {
+        title: "ตัวสร้างคำบรรยายวิดีโอแบบแบทช์",
+        subtitle: "เลือกไฟล์วิดีโอหลายไฟล์เพื่อสร้างคำบรรยายภาษาจีน อังกฤษ และฝรั่งเศสโดยอัตโนมัติ",
+        uploadButton: "📤 อัปโหลดและเริ่มประมวลผล",
+        statusTitle: "📊 สถานะการประมวลผล",
+        queueLabel: "วิดีโอในคิว:",
+        pendingLabel: "ไฟล์ที่รอดำเนินการ:",
+        completedLabel: "วิดีโอที่เสร็จสมบูรณ์:",
+        processingLabel: "สถานะการประมวลผล:",
+        tableOriginalFile: "ไฟล์ต้นฉบับ",
+        tableNewFile: "ไฟล์ใหม่",
+        tableDuration: "เวลาการประมวลผล (วินาที)",
+        exportButton: "📥 ส่งออกเป็น Excel",
+        refreshButton: "🔄 รีเฟรชสถานะ",
+        noData: "ยังไม่มีวิดีโอที่เสร็จสมบูรณ์",
+        browse: "เรียกดู",
+        noFilesSelected: "ไม่มีไฟล์ที่เลือก",
+        uploadSelect: "โปรดเลือกไฟล์วิดีโอเพื่ออัปโหลด",
+        uploadProcessing: "กำลังอัปโหลด {count} ไฟล์...",
+        uploadSuccess: "อัปโหลดสำเร็จ",
+        uploadError: "อัปโหลดล้มเหลว โปรดลองอีกครั้ง",
+        exportNoData: "ไม่มีข้อมูลให้ส่งออก",
+        exportSuccess: "ส่งออกวิดีโอที่เสร็จสมบูรณ์แล้ว",
+        statusError: "ไม่สามารถดึงสถานะได้",
+        processingIdle: "ว่าง",
+        processingQueue: "รอในคิว",
+        progress_starting: "🚀 เริ่มประมวลผล...",
+        progress_extracting_audio: "🎵 แยกเสียง...",
+        progress_transcribing: "📝 แปลงเสียงเป็นข้อความ...",
+        progress_translating_en: "🌍 แปลเป็นภาษาอังกฤษ...",
+        progress_translating_fr: "🇫🇷 แปลเป็นภาษาฝรั่งเศส...",
+        progress_merging_subtitles: "🎬 รวมคำบรรยายเข้ากับวิดีโอ...",
+        progress_generic: "📊 กำลังประมวลผล... ({progress}%)",
+        subtitleSettings: "การตั้งค่าคำบรรยาย",
+        zhLabel: "จีน",
+        enLabel: "อังกฤษ",
+        frLabel: "ฝรั่งเศส",
+        sizeLabel: "ขนาดตัวอักษร",
+        colorLabel: "สี",
+        orderLabel: "ลำดับคำบรรยาย (ลากเพื่อปรับ)"
+      }
+    };
+
+    let eventSource = null;
+    let currentLanguage = localStorage.getItem('language') || 'zh-TW';
+
+    function setLanguage(lang) {
+      currentLanguage = lang;
+      localStorage.setItem('language', lang);
+      updateTranslations();
+    }
+
+    function updateTranslations() {
+      document.querySelectorAll('[data-i18n]').forEach(element => {
+        const key = element.getAttribute('data-i18n');
+        element.textContent = translations[currentLanguage][key] || key;
+      });
+      updateFileStatus();
+      fetchStatus();
+      updateProgressDisplay(currentProgress || {});
+    }
+
+    let currentProgress = {};
+
+    document.getElementById('languageSelect').addEventListener('change', (e) => {
+      setLanguage(e.target.value);
+    });
+
+    document.querySelector('button[data-i18n="browse"]').addEventListener('click', () => {
+      document.getElementById('video-files').click();
+    });
+
+    document.getElementById('video-files').addEventListener('change', () => {
+      updateFileStatus();
+    });
+
+    function updateFileStatus() {
+      const fileInput = document.getElementById('video-files');
+      const fileStatus = document.getElementById('file-status');
+      if (fileInput.files.length > 0) {
+        fileStatus.textContent = `${fileInput.files.length} ${translations[currentLanguage].uploadProcessing.split(' ')[1]}`;
+      } else {
+        fileStatus.textContent = translations[currentLanguage].noFilesSelected;
+      }
+    }
+
+    document.getElementById('languageSelect').value = currentLanguage;
+    setLanguage(currentLanguage);
+
+    function showUploadStatus(message, type = 'info') {
+      const container = document.getElementById('upload-status-container');
+      message = message.replace('{count}', document.getElementById('video-files').files.length);
+      container.innerHTML = `<div class="upload-status ${type}">${message}</div>`;
+    }
+
+    function uploadVideos() {
+      const files = document.getElementById('video-files').files;
+      const uploadBtn = document.getElementById('upload-btn');
+      
+      if (files.length === 0) {
+        showUploadStatus(translations[currentLanguage].uploadSelect, 'error');
+        return;
+      }
+
+      const formData = new FormData();
+      for (const file of files) {
+        formData.append('videos', file);
+      }
+
+      // Add subtitle settings
+      const subtitleSettings = {
+        zh: {
+          font: document.getElementById('zh-font').value,
+          size: parseInt(document.getElementById('zh-size').value),
+          color: document.getElementById('zh-color').value.replace('#', '&H00')
+        },
+        en: {
+          font: document.getElementById('en-font').value,
+          size: parseInt(document.getElementById('en-size').value),
+          color: document.getElementById('en-color').value.replace('#', '&H00')
+        },
+        fr: {
+          font: document.getElementById('fr-font').value,
+          size: parseInt(document.getElementById('fr-size').value),
+          color: document.getElementById('fr-color').value.replace('#', '&H00')
+        },
+        order: Array.from(document.querySelectorAll('#order-list .order-item')).map(item => item.dataset.lang)
+      };
+      formData.append('subtitleSettings', JSON.stringify(subtitleSettings));
+
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = translations[currentLanguage].uploadButton.replace('📤 ', '⏳ ');
+      showUploadStatus(translations[currentLanguage].uploadProcessing, 'info');
+
+      fetch('/upload', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        showUploadStatus(translations[currentLanguage].uploadSuccess, 'success');
+        fetchStatus();
+        startProgressStreaming();
+        document.getElementById('video-files').value = '';
+        updateFileStatus();
+      })
+      .catch(error => {
+        console.error('Upload error:', error);
+        showUploadStatus(translations[currentLanguage].uploadError, 'error');
+      })
+      .finally(() => {
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = translations[currentLanguage].uploadButton;
+      });
+    }
+
+    function fetchStatus() {
+      fetch('/status')
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById('queue-count').textContent = data.queue.length;
+        document.getElementById('pending-count').textContent = data.pending;
+        document.getElementById('completed-count').textContent = data.completed;
+        
+        const processingStatus = document.getElementById('processing-status');
+        if (data.isProcessing && data.currentFile) {
+          processingStatus.textContent = `${translations[currentLanguage].processingLabel} ${data.currentFile}`;
+          processingStatus.style.color = '#28a745';
+        } else if (data.queue.length > 0) {
+          processingStatus.textContent = translations[currentLanguage].processingQueue;
+          processingStatus.style.color = '#ffc107';
+        } else {
+          processingStatus.textContent = translations[currentLanguage].processingIdle;
+          processingStatus.style.color = '#6c757d';
+        }
+
+        const completedVideosBody = document.getElementById('completed-videos-body');
+        completedVideosBody.innerHTML = '';
+        if (data.completedVideos && data.completedVideos.length > 0) {
+          data.completedVideos.forEach(video => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+              <td>${video.originalFile}</td>
+              <td>${video.newFile}</td>
+              <td>${video.duration.toFixed(2)}</td>
+            `;
+            completedVideosBody.appendChild(row);
+          });
+        } else {
+          const row = document.createElement('tr');
+          row.innerHTML = `<td colspan="3" style="text-align: center;">${translations[currentLanguage].noData}</td>`;
+          completedVideosBody.appendChild(row);
+        }
+        updateTranslations();
+      })
+      .catch(error => {
+        console.error('Error fetching status:', error);
+        document.getElementById('processing-status').textContent = translations[currentLanguage].statusError;
+      });
+    }
+
+    function exportToExcel() {
+      const table = document.getElementById('completed-videos-table');
+      const data = [];
+      
+      data.push([
+        translations[currentLanguage].tableOriginalFile,
+        translations[currentLanguage].tableNewFile,
+        translations[currentLanguage].tableDuration
+      ]);
+      
+      const tbody = document.getElementById('completed-videos-body');
+      const dataRows = tbody.querySelectorAll('tr');
+      dataRows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length === 3) {
+          const rowData = [
+            cells[0].textContent,
+            cells[1].textContent,
+            cells[2].textContent
+          ];
+          data.push(rowData);
+        }
+      });
+
+      if (data.length === 1) {
+        showUploadStatus(translations[currentLanguage].exportNoData, 'info');
+        return;
+      }
+
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Completed Videos');
+      XLSX.writeFile(wb, `completed_videos_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.xlsx`);
+      showUploadStatus(translations[currentLanguage].exportSuccess, 'success');
+    }
+
+    function startProgressStreaming() {
+      if (eventSource) {
+        eventSource.close();
+      }
+
+      eventSource = new EventSource('/api/process-progress');
+      
+      eventSource.onmessage = function(event) {
+        try {
+          const progress = JSON.parse(event.data);
+          currentProgress = progress;
+          updateProgressDisplay(progress);
+        } catch (error) {
+          console.error('Error parsing progress data:', error);
+        }
+      };
+
+      eventSource.onerror = function(error) {
+        console.error('EventSource error:', error);
+        setTimeout(() => {
+          if (document.getElementById('pending-count').textContent !== '0') {
+            startProgressStreaming();
+          }
+        }, 5000);
+      };
+    }
+
+    function updateProgressDisplay(progress) {
+      const progressSection = document.getElementById('progress-section');
+      const currentFileEl = document.getElementById('current-file');
+      const progressStepEl = document.getElementById('progress-step');
+      
+      if (progress.currentFile) {
+        progressSection.style.display = 'block';
+        currentFileEl.textContent = `${translations[currentLanguage].processingLabel} ${progress.currentFile}`;
+        
+        let stepText = translations[currentLanguage][`progress_${progress.step}`] || translations[currentLanguage].progress_generic.replace('{progress}', Math.round((progress.progress || 0) * 100));
+        
+        if (progress.videoIndex !== undefined && progress.totalVideos !== undefined) {
+          stepText = `[${progress.videoIndex + 1}/${progress.totalVideos}] ${stepText}`;
+        }
+        
+        progressStepEl.textContent = stepText;
+      } else {
+        progressSection.style.display = 'none';
+      }
+      
+      if (progress.queueLength !== undefined) {
+        document.getElementById('queue-count').textContent = progress.queueLength;
+      }
+      
+      if (progress.step === 'merging_subtitles' && progress.progress === 1.0) {
+        setTimeout(fetchStatus, 1000);
+      }
+    }
+
+    // Drag and drop for subtitle order
+    const orderList = document.getElementById('order-list');
+    orderList.addEventListener('dragstart', (e) => {
+      if (e.target.classList.contains('order-item')) {
+        e.target.classList.add('dragging');
+        e.dataTransfer.setData('text/plain', e.target.dataset.lang);
+      }
+    });
+    orderList.addEventListener('dragend', (e) => {
+      if (e.target.classList.contains('order-item')) {
+        e.target.classList.remove('dragging');
+      }
+    });
+    orderList.addEventListener('dragover', (e) => {
+      e.preventDefault();
+    });
+    orderList.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const draggedLang = e.dataTransfer.getData('text/plain');
+      const draggedItem = document.querySelector(`.order-item[data-lang="${draggedLang}"]`);
+      const dropTarget = e.target.closest('.order-item');
+      if (dropTarget && dropTarget !== draggedItem) {
+        const allItems = Array.from(orderList.querySelectorAll('.order-item'));
+        const fromIndex = allItems.indexOf(draggedItem);
+        const toIndex = allItems.indexOf(dropTarget);
+        if (fromIndex < toIndex) {
+          dropTarget.after(draggedItem);
+        } else {
+          dropTarget.before(draggedItem);
+        }
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      fetchStatus();
+      setTimeout(() => {
+        const pendingCount = parseInt(document.getElementById('pending-count').textContent);
+        if (pendingCount > 0) {
+          startProgressStreaming();
+        }
+      }, 1000);
+      setInterval(fetchStatus, 30000);
+    });
+
+    window.addEventListener('beforeunload', () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+    });
+  </script>
+</body>
+</html>
