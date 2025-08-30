@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Uploader</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#2563eb',
+          },
+        },
+      },
+    };
+  </script>
+  <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+  <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://unpkg.com/axios@1.7.7/dist/axios.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <div id="loading" class="text-center text-gray-600">Loading...</div>
+  <div id="error" class="hidden text-center text-red-600"></div>
+  <div id="root" class="hidden"></div>
+  <script type="text/babel">
+    window.addEventListener('error', (e) => {
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('error').classList.remove('hidden');
+      document.getElementById('error').innerText = `Failed to load resources: ${e.message}. Please check your network or try refreshing.`;
+    });
+
+    const { useState, useEffect } = React;
+
+    // Helper function to extract base file name from path
+    const getBaseName = (path) => {
+      if (!path) return '';
+      return path.split(/[\\/]/).pop().trim();
+    };
+
+    function App() {
+      const [excelFile, setExcelFile] = useState(null);
+      const [videoList, setVideoList] = useState([]);
+      const [videoFiles, setVideoFiles] = useState({});
+      const [uploadProgress, setUploadProgress] = useState({});
+      const [error, setError] = useState('');
+
+      useEffect(() => {
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('root').classList.remove('hidden');
+      }, []);
+
+      // Poll for progress updates
+      const pollProgress = async (recordId, fileName) => {
+        try {
+          const response = await axios.get(`http://localhost:8011/progress/${recordId}`);
+          const { progress, status, error_message } = response.data;
+          setUploadProgress(prev => ({ ...prev, [fileName]: progress }));
+          setVideoList(prev => prev.map(v =>
+            v.fileName === fileName ? { ...v, status: error_message ? `Failed: ${error_message}` : status } : v
+          ));
+          if (status === 'uploading') {
+            setTimeout(() => pollProgress(recordId, fileName), 1000);
+          }
+        } catch (err) {
+          setError(`Progress polling failed for ${fileName}: ${err.message}`);
+        }
+      };
+
+      const handleExcelUpload = (event) => {
+        const file = event.target.files[0];
+        if (!file) {
+          setError('No Excel file selected');
+          return;
+        }
+        setExcelFile(file);
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+            const json = XLSX.utils.sheet_to_json(sheet);
+
+            // Validate column names
+            const requiredColumns = ['Title', 'Description', 'Video File Name'];
+            const headers = Object.keys(json[0] || {});
+            const missingColumns = requiredColumns.filter(col => !headers.includes(col));
+            if (missingColumns.length > 0) {
+              setError(`Excel file missing required columns: ${missingColumns.join(', ')}`);
+              return;
+            }
+
+            const parsedVideos = json.map(row => ({
+              title: row['Title'] || 'Untitled',
+              description: row['Description'] || '',
+              fileName: getBaseName(row['Video File Name'] || ''), // Extract base file name
+              originalFileName: row['Video File Name'] || '', // Keep original for display
+              status: 'Pending',
+            }));
+
+            // Validate file names
+            const invalidFiles = parsedVideos.filter(v => !v.fileName);
+            if (invalidFiles.length > 0) {
+              setError('Some rows have empty or invalid Video File Name values');
+              return;
+            }
+
+            setVideoList(parsedVideos);
+            setError('');
+            console.log('Parsed videos:', parsedVideos);
+          } catch (err) {
+            setError('Failed to parse Excel file: ' + err.message);
+          }
+        };
+        reader.onerror = () => setError('Error reading Excel file');
+        reader.readAsArrayBuffer(file);
+      };
+
+      const handleVideoFiles = (event) => {
+        const files = Array.from(event.target.files);
+        if (files.length === 0) {
+          setError('No video files selected');
+          return;
+        }
+        const fileMap = {};
+        files.forEach(file => {
+          fileMap[file.name] = file;
+        });
+        setVideoFiles(fileMap);
+        setError('');
+        console.log('Selected video files:', Object.keys(fileMap));
+      };
+
+      const startUpload = async () => {
+        setError('');
+        // Validate that all video files are present
+        const missingFiles = videoList.filter(video => !videoFiles[video.fileName]);
+        if (missingFiles.length > 0) {
+          setError(`Missing video files: ${missingFiles.map(v => v.originalFileName).join(', ')}`);
+          setVideoList(prev => prev.map(v =>
+            missingFiles.find(m => m.fileName === v.fileName)
+              ? { ...v, status: `Failed: Video file not found` }
+              : v
+          ));
+          return;
+        }
+
+        for (const video of videoList) {
+          const videoFile = videoFiles[video.fileName];
+          const formData = new FormData();
+          formData.append('video', videoFile);
+          formData.append('title', video.title);
+          formData.append('description', video.description);
+
+          try {
+            setVideoList(prev => prev.map(v =>
+              v.fileName === video.fileName ? { ...v, status: 'Uploading' } : v
+            ));
+
+            const response = await axios.post('http://localhost:8011/upload', formData, {
+              headers: { 'X-Video-Filename': video.fileName },
+              onUploadProgress: (progressEvent) => {
+                const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                setUploadProgress(prev => ({
+                  ...prev,
+                  [video.fileName]: percentCompleted,
+                }));
+              },
+            });
+
+            setVideoList(prev => prev.map(v =>
+              v.fileName === video.fileName ? { ...v, status: `Success: ${response.data.videoId}` } : v
+            ));
+            if (response.data.recordId) {
+              pollProgress(response.data.recordId, video.fileName);
+            }
+          } catch (error) {
+            console.error(`Upload error for ${video.fileName}:`, error.response || error.message);
+            setVideoList(prev => prev.map(v =>
+              v.fileName === video.fileName ? { ...v, status: `Failed: ${error.message}` } : v
+            ));
+            setError(`Upload failed for ${video.originalFileName}: ${error.message}`);
+          }
+        }
+      };
+
+      return (
+        <div className="container mx-auto p-6 bg-white rounded-lg shadow-lg max-w-4xl">
+          <h1 className="text-2xl font-bold mb-4 text-center text-primary">YouTube Video Uploader</h1>
+
+          {error && (
+            <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">
+              {error}
+            </div>
+          )}
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Upload Excel File (Title, Description, Video File Name)
+            </label>
+            <input
+              type="file"
+              accept=".xlsx"
+              onChange={handleExcelUpload}
+              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-primary hover:file:bg-blue-100"
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Upload Video Files
+            </label>
+            <input
+              type="file"
+              accept="video/*"
+              multiple
+              onChange={handleVideoFiles}
+              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-primary hover:file:bg-blue-100"
+            />
+          </div>
+
+          {videoList.length > 0 && (
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold mb-2">Video List</h2>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-200">
+                      <th className="p-2">Title</th>
+                      <th className="p-2">Description</th>
+                      <th className="p-2">File Name</th>
+                      <th className="p-2">Status</th>
+                      <th className="p-2">Progress</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {videoList.map((video, index) => (
+                      <tr key={index} className="border-b">
+                        <td className="p-2">{video.title}</td>
+                        <td className="p-2">{video.description}</td>
+                        <td className="p-2">{video.originalFileName}</td>
+                        <td className="p-2">{video.status}</td>
+                        <td className="p-2">
+                          <div className="w-full bg-gray-200 rounded-full h-4">
+                            <div
+                              className="bg-primary h-4 rounded-full transition-all duration-300"
+                              style={{ width: `${uploadProgress[video.fileName] || 0}%` }}
+                            ></div>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={startUpload}
+            disabled={videoList.length === 0 || Object.keys(videoFiles).length === 0}
+            className="w-full py-2 px-4 bg-primary text-white font-semibold rounded-lg disabled:bg-gray-400 hover:bg-blue-700 transition-colors"
+          >
+            Start Upload
+          </button>
+        </div>
+      );
+    }
+
+    try {
+      ReactDOM.render(<App />, document.getElementById('root'));
+    } catch (err) {
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('error').classList.remove('hidden');
+      document.getElementById('error').innerText = `Failed to render app: ${err.message}`;
+    }
+  </script>
+</body>
+</html>
