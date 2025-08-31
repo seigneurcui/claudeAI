@@ -389,7 +389,7 @@ async function sendNotifications(videoFileName, originalFileName, outputPath, du
         summary: '视频转换完毕',
         contentType: 2,
         topicIds: [36095],
-        uids: ['UID_FD24Cus5ocGO5CKQAcxkw8gP2ZRu'],
+        uids: ['UID_FD24Cus5ocGO5CKQAcx8gP2ZRu'],
         verifyPay: false,
         verifyPayType: 0,
       },
@@ -399,7 +399,7 @@ async function sendNotifications(videoFileName, originalFileName, outputPath, du
       url: 'http://www.pushplus.plus/send',
       headers: { 'Content-Type': 'application/json' },
       data: {
-        token: 'f76bf4e54490439c86fdae45e9db76ce',
+        token: 'f76bf4e54490439c86fdae49db76ce',
         title: '视频转换完毕',
         content: `视频转换完毕: ${originalFileName} ==> ${videoFileName} : ${duration}`,
       },
@@ -408,7 +408,7 @@ async function sendNotifications(videoFileName, originalFileName, outputPath, du
       name: 'Resend Email',
       url: 'https://api.resend.com/emails',
       headers: {
-        'Authorization': 'Bearer re_KwMt5gij_5c7XvcqJeNjmAhV3cy1DAvfj',
+        'Authorization': 'Bearer re_KwMij_c7XvcqJeNjmAhV3cy1DAvfj',
         'Content-Type': 'application/json',
       },
       data: {
@@ -420,10 +420,10 @@ async function sendNotifications(videoFileName, originalFileName, outputPath, du
     },
     {
       name: 'Telegram',
-      url: `https://api.telegram.org/bot8371556252:AAHUpvXA_73QYDsNbmMWiqG2SOKTKzzOY_Y/sendMessage`,
+      url: `https://api.telegram.org/bot83756252:AAHUpvX73QYDsNbmMWiqG2SOKTKzzOY_Y/sendMessage`,
       headers: { 'Content-Type': 'application/json' },
       data: {
-        chat_id: '8200348152',
+        chat_id: '8207398152',
         text: `视频转换完毕: ${originalFileName} ==> ${videoFileName} : ${duration}`,
       },
     },
