@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>视频相册制作器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .upload-section {
+            margin-bottom: 30px;
+            padding: 25px;
+            border: 2px dashed #ddd;
+            border-radius: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .upload-section:hover {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        .upload-section h3 {
+            color: #555;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .file-input {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .file-input-button {
+            display: block;
+            width: 100%;
+            padding: 15px 20px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .file-input-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .file-list {
+            margin-top: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .file-item {
+            background: #f8f9fa;
+            padding: 10px 15px;
+            margin: 5px 0;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+        }
+
+        .file-item .file-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            margin-right: 10px;
+        }
+
+        .file-item .file-name {
+            font-weight: 500;
+            margin-bottom: 3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 300px;
+        }
+
+        .file-item .file-size {
+            color: #666;
+            font-size: 12px;
+        }
+
+        .delete-button {
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .delete-button:hover {
+            background: #c82333;
+            transform: scale(1.05);
+        }
+
+        .settings-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .setting-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .setting-item label {
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .setting-item input,
+        .setting-item select {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .setting-item input:focus,
+        .setting-item select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .create-button {
+            width: 100%;
+            padding: 20px;
+            background: linear-gradient(45deg, #28a745, #20c997);
+            color: white;
+            border: none;
+            border-radius: 15px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .create-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 30px rgba(40, 167, 69, 0.3);
+        }
+
+        .create-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .progress-section {
+            display: none;
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #ddd;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        #progressTime {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .result-section {
+            display: none;
+            background: #d4edda;
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        /* 新增：完成详情样式 */
+        .completion-details {
+            background-color: rgba(255, 255, 255, 0.5);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+            display: inline-block;
+        }
+        .completion-details p {
+            color: #155724;
+            margin: 5px 0;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .download-button {
+            display: inline-block;
+            padding: 15px 30px;
+            background: linear-gradient(45deg, #007bff, #0056b3);
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            margin-top: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .download-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 123, 255, 0.3);
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .file-count {
+            color: #667eea;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .processing {
+            animation: pulse 2s infinite;
+        }
+
+        .subtitle-warning {
+            background: #fff3cd;
+            color: #856404;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-size: 13px;
+            border-left: 4px solid #ffc107;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 视频相册制作器</h1>
+        
+        <form id="uploadForm" enctype="multipart/form-data">
+            <div class="upload-section">
+                <h3>📸 上传照片 <span id="imageCount" class="file-count">(0个文件)</span></h3>
+                <div class="file-input-wrapper">
+                    <input type="file" id="images" name="images" multiple accept="image/*" class="file-input">
+                    <button type="button" class="file-input-button">选择照片文件（支持多选）</button>
+                </div>
+                <div id="imagesList" class="file-list"></div>
+            </div>
+
+            <div class="upload-section">
+                <h3>🎥 上传视频片段 <span id="videoCount" class="file-count">(0个文件)</span></h3>
+                <div class="file-input-wrapper">
+                    <input type="file" id="videos" name="videos" multiple accept="video/*" class="file-input">
+                    <button type="button" class="file-input-button">选择视频文件（支持多选）</button>
+                </div>
+                <div id="videosList" class="file-list"></div>
+            </div>
+
+            <div class="upload-section">
+                <h3>🎵 上传背景音乐（可选）<span id="audioCount" class="file-count">(0个文件)</span></h3>
+                <div class="file-input-wrapper">
+                    <input type="file" id="audio" name="audio" accept="audio/*" class="file-input">
+                    <button type="button" class="file-input-button">选择音频文件</button>
+                </div>
+                <div id="audioList" class="file-list"></div>
+            </div>
+
+            <div class="upload-section">
+                <h3>📝 上传字幕文件（可选）<span id="subtitleCount" class="file-count">(0个文件)</span></h3>
+                <div class="file-input-wrapper">
+                    <input type="file" id="subtitles" name="subtitles" accept=".srt,.vtt" class="file-input">
+                    <button type="button" class="file-input-button">选择字幕文件（.srt 或 .vtt）</button>
+                </div>
+                <div id="subtitlesList" class="file-list"></div>
+                <div class="subtitle-warning">
+                    💡 提示：字幕文件支持多语言内容，建议使用UTF-8编码的SRT格式以获得最佳兼容性
+                </div>
+            </div>
+        </form>
+
+        <div class="settings-section">
+            <h3>⚙️ 视频设置</h3>
+            <div class="settings-grid">
+                <div class="setting-item">
+                    <label for="imageDuration">图片显示时长（秒）</label>
+                    <input type="number" id="imageDuration" value="3" min="1" max="10" step="0.5">
+                </div>
+                <div class="setting-item">
+                    <label for="transitionDuration">转场时长（秒）</label>
+                    <input type="number" id="transitionDuration" value="0.5" min="0" max="2" step="0.1">
+                </div>
+                <div class="setting-item">
+                    <label for="outputResolution">输出分辨率</label>
+                    <select id="outputResolution">
+                        <option value="1920x1080">1080p (1920x1080)</option>
+                        <option value="1280x720" selected>720p (1280x720)</option>
+                        <option value="854x480">480p (854x480)</option>
+                    </select>
+                </div>
+                <div class="setting-item">
+                    <label for="frameRate">帧率</label>
+                    <select id="frameRate">
+                        <option value="24">24 fps</option>
+                        <option value="30" selected>30 fps</option>
+                        <option value="60">60 fps</option>
+                    </select>
+                </div>
+                <div class="setting-item">
+                    <label for="outputFormat">输出格式</label>
+                    <select id="outputFormat">
+                        <option value="mp4" selected>MP4 (通用格式)</option>
+                        <option value="mov">MOV (Apple QuickTime)</option>
+                        <option value="mkv">MKV (Matroska)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h3>📝 字幕设置（可选）</h3>
+            <div class="settings-grid">
+                <div class="setting-item">
+                    <label for="subtitleFontSize">字体大小</label>
+                    <input type="number" id="subtitleFontSize" value="24" min="12" max="64" step="1">
+                </div>
+                <div class="setting-item">
+                    <label for="subtitleFontColor">字体颜色</label>
+                    <input type="color" id="subtitleFontColor" value="#ffffff">
+                </div>
+                <div class="setting-item">
+                    <label for="subtitleBackgroundColor">背景色</label>
+                    <input type="color" id="subtitleBackgroundColor" value="#000000">
+                </div>
+                <div class="setting-item">
+                    <label for="subtitleFontName">字体</label>
+                    <select id="subtitleFontName">
+                        <option value="Arial">Arial (英文)</option>
+                        <option value="SimHei">黑体 (中文)</option>
+                        <option value="SimSun">宋体 (中文)</option>
+                        <option value="KaiTi">楷体 (中文)</option>
+                        <option value="Times New Roman">Times New Roman (英文)</option>
+                        <option value="Verdana">Verdana (英文)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <button id="createButton" class="create-button" disabled>
+            🎬 开始制作视频相册
+        </button>
+
+        <div id="progressSection" class="progress-section">
+            <h3>正在制作视频相册...</h3>
+            <div class="progress-bar">
+                <div id="progressFill" class="progress-fill"></div>
+            </div>
+            <p id="progressText">准备中...</p>
+            <p id="progressTime">耗时: 0s</p>
+        </div>
+
+        <div id="resultSection" class="result-section">
+            <h3>✅ 视频相册制作完成！</h3>
+            <div class="completion-details">
+                <p id="totalDuration"></p>
+                <p id="completionTime"></p>
+            </div>
+            <p>您的视频相册已经制作完成，点击下方按钮下载。</p>
+            <a id="downloadLink" class="download-button" download>📥 下载视频相册</a>
+        </div>
+
+        <div id="errorMessage" class="error-message"></div>
+    </div>
+
+    <script>
+        let currentProjectId = null;
+        let uploadedFiles = {
+            images: [],
+            videos: [],
+            audio: null,
+            subtitles: null
+        };
+        let progressTimer = null;
+        let secondsElapsed = 0;
+
+        function setupFileInput(inputId, listId, fileType) {
+            const input = document.getElementById(inputId);
+            input.addEventListener('change', function(e) {
+                const files = Array.from(e.target.files);
+                updateFileList(files, document.getElementById(listId), fileType);
+                updateFileCount(fileType, files.length);
+                checkFormValidity();
+            });
+        }
+
+        function updateFileCount(fileType, count) {
+            const countElement = document.getElementById(fileType.replace('s', '') + 'Count');
+            if (countElement) {
+                countElement.textContent = `(${count}个文件)`;
+            }
+        }
+
+        async function deleteFile(fileName, fileType, index) {
+            const isMultiFile = fileType === 'images' || fileType === 'videos';
+            
+            if (isMultiFile) {
+                const fileArray = uploadedFiles[fileType];
+                fileArray.splice(index, 1);
+                const dataTransfer = new DataTransfer();
+                fileArray.forEach(file => dataTransfer.items.add(file));
+                document.getElementById(fileType).files = dataTransfer.files;
+            } else {
+                uploadedFiles[fileType] = null;
+                document.getElementById(fileType).value = '';
+            }
+
+            updateFileListDisplay(document.getElementById(getListId(fileType)), fileType);
+            updateFileCount(fileType, isMultiFile ? uploadedFiles[fileType].length : (uploadedFiles[fileType] ? 1 : 0));
+            checkFormValidity();
+
+            if (currentProjectId) {
+                try {
+                    await fetch('/delete-file', {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ projectId: currentProjectId, fileType, fileName })
+                    });
+                } catch (error) {
+                    console.error('通知服务器删除文件失败:', error);
+                }
+            }
+        }
+
+        function getListId(fileType) {
+            return fileType + 'List';
+        }
+
+        function updateFileList(files, listElement, fileType) {
+            if (fileType === 'images' || fileType === 'videos') {
+                uploadedFiles[fileType] = files;
+            } else {
+                uploadedFiles[fileType] = files[0] || null;
+            }
+            updateFileListDisplay(listElement, fileType);
+        }
+
+        function updateFileListDisplay(listElement, fileType) {
+            listElement.innerHTML = '';
+            const files = (fileType === 'images' || fileType === 'videos') ? uploadedFiles[fileType] : (uploadedFiles[fileType] ? [uploadedFiles[fileType]] : []);
+
+            if (!files || files.length === 0) return;
+
+            files.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.innerHTML = `
+                    <div class="file-info">
+                        <div class="file-name" title="${file.name}">${file.name}</div>
+                        <div class="file-size">${formatFileSize(file.size)}</div>
+                    </div>
+                    <button type="button" class="delete-button">🗑️ 删除</button>
+                `;
+                fileItem.querySelector('.delete-button').onclick = (e) => {
+                    e.preventDefault();
+                    deleteFile(file.name, fileType, index);
+                };
+                listElement.appendChild(fileItem);
+            });
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function checkFormValidity() {
+            const createButton = document.getElementById('createButton');
+            const hasMedia = uploadedFiles.images.length > 0 || uploadedFiles.videos.length > 0;
+            createButton.disabled = !hasMedia;
+            createButton.textContent = hasMedia ? `🎬 开始制作视频相册 (${uploadedFiles.images.length + uploadedFiles.videos.length}个媒体文件)` : '🎬 请先上传照片或视频';
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('errorMessage').style.display = 'none';
+        }
+
+        function showProgress(show = true) {
+            document.getElementById('progressSection').style.display = show ? 'block' : 'none';
+        }
+
+        function updateProgress(percent, text) {
+            document.getElementById('progressFill').style.width = percent + '%';
+            document.getElementById('progressText').textContent = text;
+        }
+
+        function showResult(downloadUrl) {
+            const resultSection = document.getElementById('resultSection');
+            document.getElementById('downloadLink').href = downloadUrl;
+            resultSection.style.display = 'block';
+        }
+
+        async function uploadFilesAndGetId() {
+            const formData = new FormData();
+            uploadedFiles.images.forEach(file => formData.append('images', file));
+            uploadedFiles.videos.forEach(file => formData.append('videos', file));
+            if (uploadedFiles.audio) formData.append('audio', uploadedFiles.audio);
+            if (uploadedFiles.subtitles) formData.append('subtitles', uploadedFiles.subtitles);
+
+            const response = await fetch('/upload', { method: 'POST', body: formData });
+            const result = await response.json();
+            if (!result.success) throw new Error(result.message || '文件上传失败');
+            currentProjectId = result.data.projectId;
+        }
+
+        async function triggerAlbumCreation() {
+            const settings = {
+                imageDuration: parseFloat(document.getElementById('imageDuration').value),
+                transitionDuration: parseFloat(document.getElementById('transitionDuration').value),
+                outputResolution: document.getElementById('outputResolution').value,
+                frameRate: parseInt(document.getElementById('frameRate').value),
+                outputFormat: document.getElementById('outputFormat').value,
+                subtitle: {
+                    fontSize: parseInt(document.getElementById('subtitleFontSize').value),
+                    fontColor: document.getElementById('subtitleFontColor').value,
+                    backgroundColor: document.getElementById('subtitleBackgroundColor').value,
+                    fontName: document.getElementById('subtitleFontName').value
+                }
+            };
+
+            const response = await fetch('/create-album', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ projectId: currentProjectId, settings })
+            });
+
+            const result = await response.json();
+            if (!result.success) throw new Error(result.details || result.message || '视频制作失败');
+            return result;
+        }
+
+        function startTimer() {
+            if (progressTimer) clearInterval(progressTimer);
+            secondsElapsed = 0;
+            const timeElement = document.getElementById('progressTime');
+            timeElement.textContent = '耗时: 0s';
+            progressTimer = setInterval(() => {
+                secondsElapsed++;
+                timeElement.textContent = `耗时: ${secondsElapsed}s`;
+            }, 1000);
+        }
+
+        function stopTimer() {
+            if (progressTimer) clearInterval(progressTimer);
+            progressTimer = null;
+        }
+
+        async function handleCreateAlbum() {
+            const createButton = document.getElementById('createButton');
+            const originalText = createButton.textContent;
+            
+            createButton.disabled = true;
+            createButton.textContent = '处理中...';
+            createButton.classList.add('processing');
+            hideError();
+            document.getElementById('resultSection').style.display = 'none';
+
+            startTimer();
+            try {
+                showProgress(true);
+                updateProgress(10, '正在上传文件...');
+
+                await uploadFilesAndGetId();
+                updateProgress(40, '文件上传完成，正在准备处理...');
+                
+                const result = await triggerAlbumCreation();
+                
+                // 成功后停止计时器并显示最终指标
+                stopTimer();
+                updateProgress(100, '制作完成！');
+
+                const now = new Date();
+                const timestamp = now.toLocaleString('zh-CN', { hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                
+                document.getElementById('totalDuration').textContent = `总耗时: ${secondsElapsed} 秒`;
+                document.getElementById('completionTime').textContent = `完成时间: ${timestamp}`;
+                
+                setTimeout(() => {
+                    showProgress(false);
+                    showResult(result.downloadUrl);
+                }, 500);
+
+            } catch (error) {
+                // 失败后也要停止计时器
+                stopTimer();
+                console.error('创建视频相册错误:', error);
+                showError('处理失败: ' + error.message);
+                showProgress(false);
+            } finally {
+                createButton.disabled = false;
+                createButton.textContent = originalText;
+                createButton.classList.remove('processing');
+            }
+        }
+
+        function resetForm() {
+            uploadedFiles = { images: [], videos: [], audio: null, subtitles: null };
+            document.getElementById('uploadForm').reset();
+            ['imagesList', 'videosList', 'audioList', 'subtitlesList'].forEach(id => document.getElementById(id).innerHTML = '');
+            updateFileCount('images', 0);
+            updateFileCount('videos', 0);
+            updateFileCount('audio', 0);
+            updateFileCount('subtitles', 0);
+            checkFormValidity();
+            document.getElementById('resultSection').style.display = 'none';
+            hideError();
+            currentProjectId = null;
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            setupFileInput('images', 'imagesList', 'images');
+            setupFileInput('videos', 'videosList', 'videos');
+            setupFileInput('audio', 'audioList', 'audio');
+            setupFileInput('subtitles', 'subtitlesList', 'subtitles');
+
+            document.getElementById('createButton').addEventListener('click', handleCreateAlbum);
+
+            const resetButton = document.createElement('button');
+            resetButton.textContent = '🔄 重新开始';
+            resetButton.type = 'button';
+            resetButton.style.cssText = `display: block; margin: 20px auto 0; padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px;`;
+            resetButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (confirm('确定要清空所有已选文件并重置设置吗？')) {
+                    resetForm();
+                }
+            });
+            
+            document.querySelector('.container').appendChild(resetButton);
+            checkFormValidity();
+        });
+    </script>
+</body>
+</html>
