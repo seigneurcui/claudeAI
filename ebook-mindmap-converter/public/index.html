@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>电子书思维导图转换工具</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <header class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-brain"></i> 电子书思维导图转换工具</h1>
+                <p>使用本地Ollama模型将电子书转换为结构化思维导图</p>
+            </div>
+        </header>
+
+        <!-- 导航菜单 -->
+        <nav class="nav-tabs">
+            <button class="nav-tab active" data-tab="upload">
+                <i class="fas fa-upload"></i> 文件上传
+            </button>
+            <button class="nav-tab" data-tab="conversion">
+                <i class="fas fa-cogs"></i> 转换管理
+            </button>
+            <button class="nav-tab" data-tab="mindmap">
+                <i class="fas fa-project-diagram"></i> 思维导图库
+            </button>
+            <button class="nav-tab" data-tab="settings">
+                <i class="fas fa-cog"></i> 设置
+            </button>
+        </nav>
+
+        <!-- 主要内容区域 -->
+        <main class="main-content">
+            <!-- 文件上传页面 -->
+            <div class="tab-content active" id="upload">
+                <div class="upload-section">
+                    <div class="upload-area" id="uploadArea">
+                        <div class="upload-icon">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                        </div>
+                        <h3>拖拽文件到此处或点击选择文件</h3>
+                        <p>支持格式: EPUB, PDF, TXT, RTF, DOCX, MOBI, AZW, AZW3, CBR, CBZ</p>
+                        <input type="file" id="fileInput" multiple accept=".epub,.pdf,.txt,.rtf,.docx,.mobi,.azw,.azw3,.cbr,.cbz">
+                        <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                            <i class="fas fa-plus"></i> 选择文件
+                        </button>
+                    </div>
+
+                    <div class="model-selection">
+                        <label for="modelSelect">选择Ollama模型:</label>
+                        <select id="modelSelect">
+                            <option value="">加载中...</option>
+                        </select>
+                        <button id="refreshModels" class="btn-secondary">
+                            <i class="fas fa-sync-alt"></i> 刷新模型
+                        </button>
+                    </div>
+
+                    <div class="upload-actions">
+                        <button id="startUpload" class="btn-primary" disabled>
+                            <i class="fas fa-play"></i> 开始上传
+                        </button>
+                        <button id="clearFiles" class="btn-secondary">
+                            <i class="fas fa-trash"></i> 清空列表
+                        </button>
+                    </div>
+                </div>
+
+                <div class="file-list" id="fileList">
+                    <!-- 文件列表将在这里动态生成 -->
+                </div>
+            </div>
+
+            <!-- 转换管理页面 -->
+            <div class="tab-content" id="conversion">
+                <div class="conversion-controls">
+                    <div class="controls-row">
+                        <button id="startAllConversions" class="btn-primary">
+                            <i class="fas fa-play-circle"></i> 开始全部转换
+                        </button>
+                        <button id="cancelAllConversions" class="btn-danger">
+                            <i class="fas fa-stop-circle"></i> 取消全部转换
+                        </button>
+                        <button id="exportExcel" class="btn-success">
+                            <i class="fas fa-file-excel"></i> 导出Excel报告
+                        </button>
+                    </div>
+                    
+                    <div class="progress-overview">
+                        <div class="progress-stats">
+                            <div class="stat-item">
+                                <span class="stat-label">总文件数:</span>
+                                <span class="stat-value" id="totalFiles">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">已完成:</span>
+                                <span class="stat-value" id="completedFiles">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">处理中:</span>
+                                <span class="stat-value" id="processingFiles">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">总耗时:</span>
+                                <span class="stat-value" id="totalTime">0秒</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="conversion-list" id="conversionList">
+                    <!-- 转换列表将在这里动态生成 -->
+                </div>
+            </div>
+
+            <!-- 思维导图库页面 -->
+            <div class="tab-content" id="mindmap">
+                <div class="mindmap-controls">
+                    <div class="search-section">
+                        <div class="search-group">
+                            <input type="text" id="searchKeyword" placeholder="搜索文件名或内容...">
+                            <button id="searchBtn" class="btn-primary">
+                                <i class="fas fa-search"></i> 搜索
+                            </button>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <select id="dateFilter">
+                                <option value="">全部时间</option>
+                                <option value="today">今天</option>
+                                <option value="week">本周</option>
+                                <option value="month">本月</option>
+                            </select>
+                            
+                            <select id="modelFilter">
+                                <option value="">全部模型</option>
+                            </select>
+                            
+                            <button id="clearFilters" class="btn-secondary">
+                                <i class="fas fa-times"></i> 清除筛选
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mindmap-grid" id="mindmapGrid">
+                    <!-- 思维导图网格将在这里动态生成 -->
+                </div>
+            </div>
+
+            <!-- 设置页面 -->
+            <div class="tab-content" id="settings">
+                <div class="settings-section">
+                    <h3><i class="fas fa-server"></i> Ollama设置</h3>
+                    <div class="setting-item">
+                        <label for="ollamaUrl">Ollama服务地址:</label>
+                        <input type="text" id="ollamaUrl" value="http://localhost:11434">
+                        <button id="testOllama" class="btn-secondary">测试连接</button>
+                    </div>
+                    
+                    <div class="setting-item">
+                        <label for="defaultModel">默认模型:</label>
+                        <select id="defaultModel">
+                            <option value="llama2">llama2</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3><i class="fas fa-database"></i> 数据库设置</h3>
+                    <div class="setting-item">
+                        <label>数据库状态:</label>
+                        <span id="dbStatus" class="status-indicator">检查中...</span>
+                        <button id="testDb" class="btn-secondary">测试连接</button>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3><i class="fas fa-chart-bar"></i> 系统统计</h3>
+                    <div class="stats-grid" id="systemStats">
+                        <!-- 系统统计将在这里动态生成 -->
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 进度模态框 -->
+        <div class="modal" id="progressModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>转换进度</h3>
+                    <button class="modal-close" onclick="closeProgressModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="progress-item" id="progressItem">
+                        <div class="progress-info">
+                            <span class="filename">文件名</span>
+                            <span class="progress-text">0%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 0%"></div>
+                        </div>
+                        <div class="progress-message">准备中...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 通知区域 -->
+        <div class="notifications" id="notifications">
+            <!-- 通知将在这里动态生成 -->
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,2 +1,0 @@
-# claudeAI
-claudeAI code silo
