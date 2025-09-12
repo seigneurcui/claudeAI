@@ -8,7 +8,7 @@ const Conversion = require('../models/Conversion');
 
 const router = express.Router();
 
-// 开始转换
+// Start conversion
 router.post('/start/:conversionId', async (req, res) => {
   try {
     const conversion = await Conversion.findById(req.params.conversionId);
@@ -21,18 +21,21 @@ router.post('/start/:conversionId', async (req, res) => {
       return res.status(400).json({ error: '文件状态不正确，无法开始转换' });
     }
 
-    // 更新状态为处理中
+    // Debug: Log filename from database
+    console.log(`Starting conversion for: ${conversion.original_filename} (stored as ${conversion.filename})`);
+
+    // Update status to processing
     await conversion.update({ 
       status: 'processing',
       progress: 0
     });
 
-    // 获取WebSocket实例
+    // Get WebSocket instance
     const io = req.app.get('io');
     
-    // 异步处理转换
+    // Process conversion asynchronously
     processConversion(conversion, io).catch(error => {
-      console.error('转换处理失败:', error);
+      console.error(`转换处理失败 for ${conversion.original_filename}:`, error);
       conversion.update({
         status: 'failed',
         error_message: error.message
@@ -58,42 +61,43 @@ router.post('/start/:conversionId', async (req, res) => {
   }
 });
 
-// 异步转换处理函数
+// Asynchronous conversion processing function
 async function processConversion(conversion, io) {
   const startTime = Date.now();
   
   try {
-    // 发送开始信号
+    // Send start signal
     io.emit('conversion_started', {
       conversionId: conversion.id,
-      message: '开始解析文件...'
+      message: `开始解析文件: ${conversion.original_filename}`
     });
 
-    // 1. 解析文件
+    // 1. Parse file
     await conversion.update({ progress: 10 });
     io.emit('conversion_progress', {
       conversionId: conversion.id,
       progress: 10,
-      message: '正在解析文件...'
+      message: `正在解析文件: ${conversion.original_filename}`
     });
 
     const fileParser = new FileParser();
     const uploadDir = process.env.UPLOAD_DIR || './uploads';
     const filePath = path.join(uploadDir, conversion.filename);
     
+    console.log(`Parsing file at path: ${filePath}, original name: ${conversion.original_filename}`);
     const parsedData = await fileParser.parseFile(filePath, conversion.original_filename);
     
     await conversion.update({ progress: 30 });
     io.emit('conversion_progress', {
       conversionId: conversion.id,
       progress: 30,
-      message: '文件解析完成，开始生成思维导图...'
+      message: `文件 ${conversion.original_filename} 解析完成，开始生成思维导图...`
     });
 
-    // 2. 生成思维导图
+    // 2. Generate mindmap
     const ollamaClient = new OllamaClient(process.env.OLLAMA_BASE_URL);
     
-    // 检查模型是否可用
+    // Check if model exists
     const modelExists = await ollamaClient.checkModel(conversion.model_used);
     if (!modelExists) {
       throw new Error(`模型 ${conversion.model_used} 不存在，请先安装该模型`);
@@ -106,7 +110,7 @@ async function processConversion(conversion, io) {
       message: '正在调用AI模型生成思维导图...'
     });
 
-    // 使用流式生成以显示进度
+    // Use streaming generation to show progress
     const mindmapData = await ollamaClient.generateStream(
       parsedData.text,
       conversion.model_used,
@@ -124,10 +128,10 @@ async function processConversion(conversion, io) {
     io.emit('conversion_progress', {
       conversionId: conversion.id,
       progress: 80,
-      message: '思维导图生成完成，正在保存文件...'
+      message: `思维导图生成完成，正在保存文件: ${conversion.original_filename}`
     });
 
-    // 3. 生成思维导图文件
+    // 3. Generate mindmap files
     const mindmapGenerator = new MindmapGenerator();
     const filename = `${conversion.id}_${Date.now()}`;
     
@@ -140,10 +144,10 @@ async function processConversion(conversion, io) {
       message: '文件生成完成，正在保存到数据库...'
     });
 
-    // 4. 生成摘要
+    // 4. Generate summary
     const summary = await ollamaClient.generateSummary(parsedData.text, conversion.model_used);
 
-    // 5. 更新数据库
+    // 5. Update database
     const processingTime = Math.round((Date.now() - startTime) / 1000);
     
     await conversion.update({
@@ -154,7 +158,7 @@ async function processConversion(conversion, io) {
       processing_time: processingTime
     });
 
-    // 发送完成信号
+    // Send completion signal
     io.emit('conversion_completed', {
       conversionId: conversion.id,
       processingTime: processingTime,
@@ -184,7 +188,7 @@ async function processConversion(conversion, io) {
   }
 }
 
-// 获取转换状态
+// Get conversion status
 router.get('/status/:conversionId', async (req, res) => {
   try {
     const conversion = await Conversion.findById(req.params.conversionId);
@@ -210,7 +214,7 @@ router.get('/status/:conversionId', async (req, res) => {
   }
 });
 
-// 批量开始转换
+// Batch start conversions
 router.post('/batch-start', async (req, res) => {
   try {
     const { conversionIds } = req.body;
@@ -232,7 +236,7 @@ router.post('/batch-start', async (req, res) => {
             progress: 0
           });
 
-          // 异步处理转换
+          // Process conversion asynchronously
           processConversion(conversion, io).catch(error => {
             console.error(`转换 ${conversionId} 失败:`, error);
             conversion.update({
@@ -275,7 +279,7 @@ router.post('/batch-start', async (req, res) => {
   }
 });
 
-// 取消转换
+// Cancel conversion
 router.post('/cancel/:conversionId', async (req, res) => {
   try {
     const conversion = await Conversion.findById(req.params.conversionId);
@@ -311,7 +315,7 @@ router.post('/cancel/:conversionId', async (req, res) => {
   }
 });
 
-// 获取所有转换记录
+// Get all conversion records
 router.get('/all', async (req, res) => {
   try {
     const conversions = await Conversion.findAll();

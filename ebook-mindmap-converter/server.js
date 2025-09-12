@@ -59,7 +59,8 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: '接口不存在' });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 9022;
+//const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`服务器运行在端口 ${PORT}`);
   console.log(`访问地址: http://localhost:${PORT}`);

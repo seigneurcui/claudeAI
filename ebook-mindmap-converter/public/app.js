@@ -4,6 +4,20 @@ let selectedFiles = [];
 let conversions = [];
 let availableModels = [];
 let currentTab = 'upload';
+let allMindmaps = [];
+let currentMindmapPage = 1;
+let perPage = 9;
+let currentConversionPage = 1;
+let conversionsPerPage = 10;
+
+// 防抖函数，避免快速多次触发搜索
+function debounce(func, wait) {
+    let timeout;
+    return function (...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+}
 
 // 初始化应用
 document.addEventListener('DOMContentLoaded', function() {
@@ -104,10 +118,179 @@ function initializeEventListeners() {
     document.getElementById('startAllConversions').addEventListener('click', startAllConversions);
     document.getElementById('cancelAllConversions').addEventListener('click', cancelAllConversions);
     document.getElementById('exportExcel').addEventListener('click', exportExcel);
-    document.getElementById('searchBtn').addEventListener('click', searchMindmaps);
-    document.getElementById('clearFilters').addEventListener('click', clearFilters);
+    
+    // 搜索相关事件监听器 - 修复版本
+    const searchBtn = document.getElementById('searchBtn');
+    const searchKeyword = document.getElementById('searchKeyword');
+    const modelFilter = document.getElementById('modelFilter');
+    const dateFilter = document.getElementById('dateFilter');
+    const clearFiltersBtn = document.getElementById('clearFilters');
+    
+    if (searchBtn) {
+        searchBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            console.log('搜索按钮被点击');
+            performSearch();
+        });
+    }
+    
+    if (searchKeyword) {
+        // 回车键搜索
+        searchKeyword.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                console.log('回车键触发搜索');
+                performSearch();
+            }
+        });
+        
+        // 实时搜索（带防抖）
+        searchKeyword.addEventListener('input', debounce(() => {
+            console.log('输入框内容变化，触发搜索');
+            performSearch();
+        }, 500));
+    }
+    
+    if (modelFilter) {
+        modelFilter.addEventListener('change', () => {
+            console.log('模型筛选变化，触发搜索');
+            performSearch();
+        });
+    }
+    
+    if (dateFilter) {
+        dateFilter.addEventListener('change', () => {
+            console.log('日期筛选变化，触发搜索');
+            performSearch();
+        });
+    }
+    
+    if (clearFiltersBtn) {
+        clearFiltersBtn.addEventListener('click', () => {
+            console.log('清除筛选按钮被点击');
+            clearFilters();
+        });
+    }
+    
     document.getElementById('testOllama').addEventListener('click', testOllamaConnection);
     document.getElementById('testDb').addEventListener('click', testDatabaseConnection);
+    
+    // 分页选择器事件
+    document.getElementById('perPageSelect').addEventListener('change', () => {
+        perPage = parseInt(document.getElementById('perPageSelect').value);
+        if (perPage === 0) perPage = 999999; // Treat ALL as a large number
+        currentMindmapPage = 1;
+        updateMindmapDisplay();
+    });
+    
+    document.getElementById('conversionsPerPageSelect').addEventListener('change', () => {
+        conversionsPerPage = parseInt(document.getElementById('conversionsPerPageSelect').value);
+        if (conversionsPerPage === 0) conversionsPerPage = 999999; // Treat ALL as a large number
+        currentConversionPage = 1;
+        updateConversionList();
+    });
+}
+
+// 统一的搜索执行函数
+async function performSearch() {
+    console.log('开始执行搜索...');
+    
+    const keyword = document.getElementById('searchKeyword')?.value?.trim() || '';
+    const dateFilter = document.getElementById('dateFilter')?.value || '';
+    const modelFilter = document.getElementById('modelFilter')?.value || '';
+    
+    console.log('搜索参数:', { keyword, dateFilter, modelFilter });
+    
+    try {
+        // 如果没有任何筛选条件，直接加载所有数据
+        if (!keyword && !dateFilter && !modelFilter) {
+            console.log('无筛选条件，加载所有数据');
+            await loadMindmaps();
+            return;
+        }
+        
+        const params = new URLSearchParams();
+        
+        // 添加关键字参数
+        if (keyword) {
+            params.append('keyword', keyword);
+            console.log('添加关键字筛选:', keyword);
+        }
+        
+        // 添加模型筛选参数
+        if (modelFilter) {
+            params.append('model_used', modelFilter);
+            console.log('添加模型筛选:', modelFilter);
+        }
+        
+        // 添加日期筛选参数
+        if (dateFilter) {
+            const now = new Date();
+            let startDate;
+            
+            switch (dateFilter) {
+                case 'today':
+                    startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    break;
+                case 'week':
+                    startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                    break;
+                case 'month':
+                    startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+                    break;
+                default:
+                    startDate = null;
+            }
+            
+            if (startDate) {
+                params.append('start_date', startDate.toISOString().split('T')[0]);
+                params.append('end_date', now.toISOString().split('T')[0]);
+                console.log('添加日期筛选:', { 
+                    start_date: startDate.toISOString().split('T')[0], 
+                    end_date: now.toISOString().split('T')[0] 
+                });
+            }
+        }
+        
+        const searchUrl = `/api/mindmap/search?${params.toString()}`;
+        console.log('搜索URL:', searchUrl);
+        
+        showNotification('正在搜索...', 'info');
+        
+        const response = await fetch(searchUrl, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        console.log('搜索响应状态:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('搜索结果:', result);
+        
+        if (result.success) {
+            allMindmaps = result.data || [];
+            currentMindmapPage = 1;
+            populateMindmapModelFilter();
+            updateMindmapDisplay();
+            showNotification(`找到 ${allMindmaps.length} 个结果`, 'success');
+        } else {
+            console.error('搜索失败:', result.error);
+            showNotification(`搜索失败: ${result.error}`, 'error');
+            allMindmaps = [];
+            populateMindmapModelFilter();
+            updateMindmapDisplay();
+        }
+    } catch (error) {
+        console.error('搜索过程中发生错误:', error);
+        showNotification(`搜索失败: ${error.message}`, 'error');
+        allMindmaps = [];
+        populateMindmapModelFilter();
+        updateMindmapDisplay();
+    }
 }
 
 // 标签页切换
@@ -306,90 +489,22 @@ async function startUpload() {
             selectedFiles = [];
             updateFileList();
             updateUploadButton();
-            loadConversions();
+            
+            // 自动开始转换
+            const conversionIds = result.conversions.map(c => c.id);
+            await startAllConversions(conversionIds);
         } else {
             showNotification(`上传失败: ${result.error}`, 'error');
         }
     } catch (error) {
-        console.error('上传失败:', error);
-        showNotification(`上传失败: ${error.message}`, 'error');
+        console.error('文件上传失败:', error);
+        showNotification(`文件上传失败: ${error.message}`, 'error');
     }
-}
-
-// 加载模型列表
-async function loadModels() {
-    try {
-        console.log('正在加载模型列表...');
-        const response = await fetch('/api/ollama/models', {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        console.log('模型列表响应状态:', response.status);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const result = await response.json();
-        console.log('模型列表结果:', result);
-        
-        if (result.success && result.data) {
-            availableModels = result.data;
-            updateModelSelect();
-            showNotification(`成功加载 ${availableModels.length} 个模型`, 'success');
-        } else {
-            console.error('模型列表加载失败:', result.error || result.message);
-            showNotification(`加载模型列表失败: ${result.error || result.message}`, 'error');
-        }
-    } catch (error) {
-        console.error('加载模型失败:', error);
-        showNotification(`加载模型列表失败: ${error.message}`, 'error');
-        
-        // 如果加载失败，显示默认模型选项
-        showDefaultModels();
-    }
-}
-
-// 更新模型选择下拉框
-function updateModelSelect() {
-    const modelSelect = document.getElementById('modelSelect');
-    const defaultModelSelect = document.getElementById('defaultModel');
-    
-    const options = availableModels.map(model => 
-        `<option value="${model.name}">${model.name} (${formatFileSize(model.size)})</option>`
-    ).join('');
-    
-    modelSelect.innerHTML = '<option value="">请选择模型</option>' + options;
-    defaultModelSelect.innerHTML = options;
-    
-    updateUploadButton();
-}
-
-// 显示默认模型选项（当无法加载模型列表时）
-function showDefaultModels() {
-    const modelSelect = document.getElementById('modelSelect');
-    const defaultModelSelect = document.getElementById('defaultModel');
-    
-    const defaultOptions = `
-        <option value="llama3.2:1b">llama3.2:1b (推荐)</option>
-        <option value="llama2">llama2</option>
-        <option value="mistral">mistral</option>
-        <option value="codellama">codellama</option>
-    `;
-    
-    modelSelect.innerHTML = '<option value="">请选择模型</option>' + defaultOptions;
-    defaultModelSelect.innerHTML = defaultOptions;
-    
-    updateUploadButton();
 }
 
 // 加载转换列表
 async function loadConversions() {
     try {
-        console.log('正在加载转换列表...');
         const response = await fetch('/api/conversion/all');
         const result = await response.json();
         
@@ -397,153 +512,147 @@ async function loadConversions() {
             conversions = result.data;
             updateConversionList();
             updateProgressStats();
-        } else {
-            console.error('加载转换列表失败:', result.error);
         }
     } catch (error) {
         console.error('加载转换列表失败:', error);
-        showNotification('加载转换列表失败', 'error');
     }
 }
 
-// 更新转换列表显示
+// 更新转换列表
 function updateConversionList() {
     const conversionList = document.getElementById('conversionList');
     
-    if (conversions.length === 0) {
+    const perPageValue = parseInt(document.getElementById('conversionsPerPageSelect').value);
+    conversionsPerPage = perPageValue === 0 ? conversions.length : perPageValue;
+
+    const start = (currentConversionPage - 1) * conversionsPerPage;
+    const end = start + conversionsPerPage;
+    const displayedConversions = conversions.slice(start, end);
+    
+    if (displayedConversions.length === 0) {
         conversionList.innerHTML = '<p style="text-align: center; color: #718096; padding: 40px;">暂无转换记录</p>';
+        updateConversionPagination();
         return;
     }
     
-    conversionList.innerHTML = conversions.map(conversion => `
-        <div class="conversion-item">
-            <div class="conversion-header">
-                <div class="conversion-title">${conversion.original_filename}</div>
-                <div class="conversion-status status-${conversion.status}">
-                    ${getStatusText(conversion.status)}
+    conversionList.innerHTML = displayedConversions.map(c => `
+        <div class="file-item">
+            <div class="file-icon">
+                <i class="fas fa-file-${getFileIcon(c.original_filename)}"></i>
+            </div>
+            <div class="file-info">
+                <div class="file-name">${c.original_filename}</div>
+                <div class="file-details">
+                    状态: ${getStatusText(c.status)} |
+                    进度: ${c.progress}% |
+                    模型: ${c.model_used} |
+                    耗时: ${c.processing_time || 0}秒
                 </div>
             </div>
-            
-            ${conversion.status === 'processing' ? `
-                <div class="conversion-progress">
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="width: ${conversion.progress}%"></div>
-                    </div>
-                </div>
-            ` : ''}
-            
-            <div class="conversion-details">
-                <div class="detail-item">
-                    <span class="detail-label">文件类型:</span>
-                    <span class="detail-value">${conversion.file_type.toUpperCase()}</span>
-                </div>
-                <div class="detail-item">
-                    <span class="detail-label">文件大小:</span>
-                    <span class="detail-value">${formatFileSize(conversion.file_size)}</span>
-                </div>
-                <div class="detail-item">
-                    <span class="detail-label">使用模型:</span>
-                    <span class="detail-value">${conversion.model_used}</span>
-                </div>
-                <div class="detail-item">
-                    <span class="detail-label">处理时间:</span>
-                    <span class="detail-value">${conversion.processing_time || 0}秒</span>
-                </div>
-                <div class="detail-item">
-                    <span class="detail-label">创建时间:</span>
-                    <span class="detail-value">${new Date(conversion.created_at).toLocaleString('zh-CN')}</span>
-                </div>
-            </div>
-            
-            ${conversion.summary ? `
-                <div class="conversion-summary">
-                    <strong>摘要:</strong> ${conversion.summary}
-                </div>
-            ` : ''}
-            
-            ${conversion.error_message ? `
-                <div class="conversion-error">
-                    <strong>错误信息:</strong> ${conversion.error_message}
-                </div>
-            ` : ''}
-            
-            <div class="conversion-actions">
-                ${conversion.status === 'uploaded' ? `
-                    <button class="btn-primary" onclick="startConversion('${conversion.id}')">
-                        <i class="fas fa-play"></i> 开始转换
+            <div class="file-actions">
+                ${c.status === 'processing' ? `
+                    <button class="btn-danger" onclick="cancelConversion('${c.id}')">
+                        <i class="fas fa-stop"></i> 取消
                     </button>
                 ` : ''}
-                
-                ${conversion.status === 'processing' ? `
-                    <button class="btn-danger" onclick="cancelConversion('${conversion.id}')">
-                        <i class="fas fa-stop"></i> 取消转换
+                ${c.status === 'completed' ? `
+                    <button class="btn-success" onclick="viewMindmap('${c.id}')">
+                        <i class="fas fa-eye"></i> 查看
                     </button>
                 ` : ''}
-                
-                ${conversion.status === 'completed' ? `
-                    <button class="btn-success" onclick="downloadMindmap('${conversion.id}', 'html')">
-                        <i class="fas fa-download"></i> 下载HTML
-                    </button>
-                    <button class="btn-success" onclick="downloadMindmap('${conversion.id}', 'png')">
-                        <i class="fas fa-image"></i> 下载PNG
-                    </button>
-                    <button class="btn-success" onclick="downloadMindmap('${conversion.id}', 'pdf')">
-                        <i class="fas fa-file-pdf"></i> 下载PDF
-                    </button>
-                ` : ''}
-                
-                <button class="btn-secondary" onclick="deleteConversion('${conversion.id}')">
+                <button class="btn-danger" onclick="deleteConversion('${c.id}')">
                     <i class="fas fa-trash"></i> 删除
                 </button>
             </div>
         </div>
     `).join('');
+    
+    updateConversionPagination();
+}
+
+// 更新转换分页控件
+function updateConversionPagination() {
+    const pagination = document.getElementById('conversionPagination');
+    pagination.innerHTML = '';
+
+    if (conversionsPerPage >= conversions.length) return; // No pagination if showing all
+
+    const totalPages = Math.ceil(conversions.length / conversionsPerPage);
+
+    const prevBtn = document.createElement('button');
+    prevBtn.textContent = '<';
+    prevBtn.disabled = currentConversionPage === 1;
+    prevBtn.onclick = () => {
+        if (currentConversionPage > 1) {
+            currentConversionPage--;
+            updateConversionList();
+        }
+    };
+    pagination.appendChild(prevBtn);
+
+    for (let i = 1; i <= totalPages; i++) {
+        const btn = document.createElement('button');
+        btn.textContent = i;
+        if (i === currentConversionPage) btn.classList.add('active');
+        btn.onclick = () => {
+            currentConversionPage = i;
+            updateConversionList();
+        };
+        pagination.appendChild(btn);
+    }
+
+    const nextBtn = document.createElement('button');
+    nextBtn.textContent = '>';
+    nextBtn.disabled = currentConversionPage === totalPages;
+    nextBtn.onclick = () => {
+        if (currentConversionPage < totalPages) {
+            currentConversionPage++;
+            updateConversionList();
+        }
+    };
+    pagination.appendChild(nextBtn);
 }
 
 // 获取状态文本
 function getStatusText(status) {
     const statusMap = {
-        'pending': '等待中',
-        'uploaded': '已上传',
-        'processing': '处理中',
-        'completed': '已完成',
-        'failed': '失败',
-        'cancelled': '已取消'
+        uploaded: '已上传',
+        processing: '处理中',
+        completed: '已完成',
+        failed: '失败',
+        cancelled: '已取消'
     };
     return statusMap[status] || status;
 }
 
-// 更新进度统计
-function updateProgressStats() {
-    const totalFiles = conversions.length;
-    const completedFiles = conversions.filter(c => c.status === 'completed').length;
-    const processingFiles = conversions.filter(c => c.status === 'processing').length;
-    const totalTime = conversions.reduce((sum, c) => sum + (c.processing_time || 0), 0);
+// 开始全部转换
+async function startAllConversions(specificIds = null) {
+    const conversionIds = specificIds || conversions
+        .filter(c => c.status === 'uploaded')
+        .map(c => c.id);
     
-    document.getElementById('totalFiles').textContent = totalFiles;
-    document.getElementById('completedFiles').textContent = completedFiles;
-    document.getElementById('processingFiles').textContent = processingFiles;
-    document.getElementById('totalTime').textContent = `${totalTime}秒`;
-}
-
-// 开始转换
-async function startConversion(conversionId) {
+    if (conversionIds.length === 0) {
+        showNotification('没有可转换的文件', 'warning');
+        return;
+    }
+    
     try {
-        const response = await fetch(`/api/conversion/start/${conversionId}`, {
-            method: 'POST'
+        const response = await fetch('/api/conversion/batch-start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ conversionIds })
         });
         
         const result = await response.json();
         
         if (result.success) {
-            showNotification('转换已开始', 'success');
-            loadConversions();
+            showNotification(`已开始 ${result.results.length} 个转换任务`, 'success');
         } else {
-            showNotification(`开始转换失败: ${result.error}`, 'error');
+            showNotification(`批量转换失败: ${result.error}`, 'error');
         }
     } catch (error) {
-        console.error('开始转换失败:', error);
-        showNotification(`开始转换失败: ${error.message}`, 'error');
+        console.error('批量转换失败:', error);
+        showNotification(`批量转换失败: ${error.message}`, 'error');
     }
 }
 
@@ -557,8 +666,7 @@ async function cancelConversion(conversionId) {
         const result = await response.json();
         
         if (result.success) {
-            showNotification('转换已取消', 'warning');
-            loadConversions();
+            showNotification('转换已取消', 'success');
         } else {
             showNotification(`取消转换失败: ${result.error}`, 'error');
         }
@@ -568,60 +676,8 @@ async function cancelConversion(conversionId) {
     }
 }
 
-// 开始全部转换
-async function startAllConversions() {
-    const uploadedConversions = conversions.filter(c => c.status === 'uploaded');
-    
-    if (uploadedConversions.length === 0) {
-        showNotification('没有可转换的文件', 'warning');
-        return;
-    }
-    
-    try {
-        const conversionIds = uploadedConversions.map(c => c.id);
-        
-        const response = await fetch('/api/conversion/batch-start', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ conversionIds })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showNotification(`批量转换已开始，共处理 ${result.results.length} 个文件`, 'success');
-            loadConversions();
-        } else {
-            showNotification(`批量转换失败: ${result.error}`, 'error');
-        }
-    } catch (error) {
-        console.error('批量转换失败:', error);
-        showNotification(`批量转换失败: ${error.message}`, 'error');
-    }
-}
-
-// 取消全部转换
-async function cancelAllConversions() {
-    const processingConversions = conversions.filter(c => c.status === 'processing');
-    
-    if (processingConversions.length === 0) {
-        showNotification('没有正在处理的转换', 'warning');
-        return;
-    }
-    
-    for (const conversion of processingConversions) {
-        await cancelConversion(conversion.id);
-    }
-}
-
 // 删除转换
 async function deleteConversion(conversionId) {
-    if (!confirm('确定要删除这个转换记录吗？')) {
-        return;
-    }
-    
     try {
         const response = await fetch(`/api/upload/${conversionId}`, {
             method: 'DELETE'
@@ -630,21 +686,48 @@ async function deleteConversion(conversionId) {
         const result = await response.json();
         
         if (result.success) {
-            showNotification('转换记录已删除', 'success');
-            loadConversions();
+            conversions = conversions.filter(c => c.id !== conversionId);
+            updateConversionList();
+            updateProgressStats();
+            showNotification('文件删除成功', 'success');
         } else {
             showNotification(`删除失败: ${result.error}`, 'error');
         }
     } catch (error) {
-        console.error('删除失败:', error);
-        showNotification(`删除失败: ${error.message}`, 'error');
+        console.error('删除文件失败:', error);
+        showNotification(`删除文件失败: ${error.message}`, 'error');
     }
 }
 
-// 下载思维导图
-function downloadMindmap(conversionId, format) {
-    const url = `/api/export/mindmap/${conversionId}/${format}`;
-    window.open(url, '_blank');
+// 取消全部转换
+async function cancelAllConversions() {
+    const processingIds = conversions
+        .filter(c => c.status === 'processing')
+        .map(c => c.id);
+    
+    if (processingIds.length === 0) {
+        showNotification('没有正在处理的转换', 'warning');
+        return;
+    }
+    
+    for (const id of processingIds) {
+        await cancelConversion(id);
+    }
+}
+
+// 更新转换统计
+function updateProgressStats() {
+    const total = conversions.length;
+    const completed = conversions.filter(c => c.status === 'completed').length;
+    const processing = conversions.filter(c => c.status === 'processing').length;
+    const totalTime = conversions
+        .filter(c => c.processing_time)
+        .reduce((sum, c) => sum + c.processing_time, 0);
+    
+    document.getElementById('totalFiles').textContent = total;
+    document.getElementById('completedFiles').textContent = completed;
+    document.getElementById('processingFiles').textContent = processing;
+    document.getElementById('totalTime').textContent = `${totalTime}秒`;
 }
 
 // 导出Excel报告
@@ -676,15 +759,44 @@ async function exportExcel() {
 // 加载思维导图库
 async function loadMindmaps() {
     try {
+        console.log('开始加载思维导图库...');
         const response = await fetch('/api/mindmap');
         const result = await response.json();
         
+        console.log('思维导图库加载响应:', result);
+        
         if (result.success) {
-            updateMindmapGrid(result.data);
+            allMindmaps = result.data || [];
+            currentMindmapPage = 1;
+            populateMindmapModelFilter();
+            updateMindmapDisplay();
+            console.log(`加载了 ${allMindmaps.length} 个思维导图`);
+        } else {
+            showNotification(`加载思维导图库失败: ${result.error}`, 'error');
+            allMindmaps = [];
+            populateMindmapModelFilter();
+            updateMindmapDisplay();
         }
     } catch (error) {
         console.error('加载思维导图库失败:', error);
+        showNotification(`加载思维导图库失败: ${error.message}`, 'error');
+        allMindmaps = [];
+        populateMindmapModelFilter();
+        updateMindmapDisplay();
     }
+}
+
+// 更新思维导图显示
+function updateMindmapDisplay() {
+    const perPageValue = parseInt(document.getElementById('perPageSelect').value);
+    perPage = perPageValue === 0 ? allMindmaps.length : perPageValue;
+
+    const start = (currentMindmapPage - 1) * perPage;
+    const end = start + perPage;
+    const displayedMindmaps = allMindmaps.slice(start, end);
+
+    updateMindmapGrid(displayedMindmaps);
+    updatePagination();
 }
 
 // 更新思维导图网格
@@ -701,7 +813,8 @@ function updateMindmapGrid(mindmaps) {
             <div class="mindmap-title">${mindmap.original_filename}</div>
             <div class="mindmap-summary">${mindmap.summary || '暂无摘要'}</div>
             <div class="mindmap-meta">
-                <span>${mindmap.file_type.toUpperCase()}</span>
+                <span>${mindmap.file_type ? mindmap.file_type.toUpperCase() : 'N/A'}</span>
+                <span>${mindmap.model_used || 'N/A'}</span>
                 <span>${new Date(mindmap.created_at).toLocaleDateString('zh-CN')}</span>
             </div>
             <div class="mindmap-actions">
@@ -719,58 +832,168 @@ function updateMindmapGrid(mindmaps) {
     `).join('');
 }
 
+// 更新分页控件
+function updatePagination() {
+    const pagination = document.getElementById('pagination');
+    pagination.innerHTML = '';
+
+    if (perPage >= allMindmaps.length) return; // No pagination if showing all
+
+    const totalPages = Math.ceil(allMindmaps.length / perPage);
+
+    const prevBtn = document.createElement('button');
+    prevBtn.textContent = '<';
+    prevBtn.disabled = currentMindmapPage === 1;
+    prevBtn.onclick = () => {
+        if (currentMindmapPage > 1) {
+            currentMindmapPage--;
+            updateMindmapDisplay();
+        }
+    };
+    pagination.appendChild(prevBtn);
+
+    for (let i = 1; i <= totalPages; i++) {
+        const btn = document.createElement('button');
+        btn.textContent = i;
+        if (i === currentMindmapPage) btn.classList.add('active');
+        btn.onclick = () => {
+            currentMindmapPage = i;
+            updateMindmapDisplay();
+        };
+        pagination.appendChild(btn);
+    }
+
+    const nextBtn = document.createElement('button');
+    nextBtn.textContent = '>';
+    nextBtn.disabled = currentMindmapPage === totalPages;
+    nextBtn.onclick = () => {
+        if (currentMindmapPage < totalPages) {
+            currentMindmapPage++;
+            updateMindmapDisplay();
+        }
+    };
+    pagination.appendChild(nextBtn);
+}
+
 // 查看思维导图
 function viewMindmap(conversionId) {
     const url = `/api/export/mindmap/${conversionId}/html`;
     window.open(url, '_blank');
 }
 
-// 搜索思维导图
-async function searchMindmaps() {
-    const keyword = document.getElementById('searchKeyword').value;
-    const dateFilter = document.getElementById('dateFilter').value;
-    const modelFilter = document.getElementById('modelFilter').value;
-    
+// 下载思维导图
+async function downloadMindmap(conversionId, format) {
     try {
-        const params = new URLSearchParams();
-        if (keyword) params.append('keyword', keyword);
-        if (dateFilter) {
-            const date = new Date();
-            switch (dateFilter) {
-                case 'today':
-                    params.append('start_date', date.toISOString().split('T')[0]);
-                    break;
-                case 'week':
-                    date.setDate(date.getDate() - 7);
-                    params.append('start_date', date.toISOString().split('T')[0]);
-                    break;
-                case 'month':
-                    date.setMonth(date.getMonth() - 1);
-                    params.append('start_date', date.toISOString().split('T')[0]);
-                    break;
-            }
-        }
-        if (modelFilter) params.append('model_used', modelFilter);
-        
-        const response = await fetch(`/api/mindmap/search?${params}`);
-        const result = await response.json();
-        
-        if (result.success) {
-            updateMindmapGrid(result.data);
-            showNotification(`找到 ${result.data.length} 个结果`, 'success');
+        const response = await fetch(`/api/export/mindmap/${conversionId}/${format}`);
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `mindmap_${conversionId}.${format}`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            showNotification(`思维导图 ${format.toUpperCase()} 下载成功`, 'success');
+        } else {
+            showNotification(`下载失败: ${format.toUpperCase()}`, 'error');
         }
     } catch (error) {
-        console.error('搜索失败:', error);
-        showNotification(`搜索失败: ${error.message}`, 'error');
+        console.error(`下载思维导图失败 (${format}):`, error);
+        showNotification(`下载失败: ${error.message}`, 'error');
     }
 }
 
-// 清除筛选
+// 清除筛选 - 修复版本
 function clearFilters() {
-    document.getElementById('searchKeyword').value = '';
-    document.getElementById('dateFilter').value = '';
-    document.getElementById('modelFilter').value = '';
+    console.log('清除所有筛选条件');
+    
+    const searchKeyword = document.getElementById('searchKeyword');
+    const dateFilter = document.getElementById('dateFilter');
+    const modelFilter = document.getElementById('modelFilter');
+    
+    if (searchKeyword) searchKeyword.value = '';
+    if (dateFilter) dateFilter.value = '';
+    if (modelFilter) modelFilter.value = '';
+    
+    // 重新加载所有数据
     loadMindmaps();
+    showNotification('筛选条件已清除', 'success');
+}
+
+// 填充思维导图模型过滤器
+function populateMindmapModelFilter() {
+    const select = document.getElementById('modelFilter');
+    if (!select) return;
+    
+    const currentValue = select.value;
+    select.innerHTML = '<option value="">全部模型</option>';
+    
+    const uniqueModels = [...new Set(allMindmaps.map(m => m.model_used).filter(Boolean))].sort();
+    
+    uniqueModels.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model;
+        option.textContent = model;
+        select.appendChild(option);
+    });
+    
+    // Restore previous selection if it still exists
+    if (currentValue && uniqueModels.includes(currentValue)) {
+        select.value = currentValue;
+    }
+}
+
+// 加载模型列表
+async function loadModels() {
+    try {
+        const ollamaUrl = document.getElementById('ollamaUrl').value || 'http://localhost:11434';
+        const response = await fetch(`${ollamaUrl}/api/tags`);
+        const result = await response.json();
+        
+        if (result.models && Array.isArray(result.models)) {
+            availableModels = result.models.map(model => model.name);
+            console.log('Loaded models:', availableModels);
+            populateModelSelect('modelSelect');
+            populateModelSelect('defaultModel');
+            showNotification('模型列表加载成功', 'success');
+        } else {
+            throw new Error('Unexpected response format');
+        }
+    } catch (error) {
+        console.error('加载模型失败:', error);
+        availableModels = [];
+        populateModelSelect('modelSelect');
+        populateModelSelect('defaultModel');
+        showNotification(`加载模型失败: ${error.message}`, 'error');
+    }
+}
+
+// 填充模型选择器
+function populateModelSelect(selectId) {
+    const select = document.getElementById(selectId);
+    select.innerHTML = '';
+    
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = selectId === 'modelSelect' ? '请选择模型' : '无默认模型';
+    select.appendChild(defaultOption);
+    
+    if (availableModels.length === 0) {
+        const noModelsOption = document.createElement('option');
+        noModelsOption.value = '';
+        noModelsOption.textContent = '无可用模型';
+        noModelsOption.disabled = true;
+        select.appendChild(noModelsOption);
+    } else {
+        availableModels.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model;
+            option.textContent = model;
+            select.appendChild(option);
+        });
+    }
 }
 
 // 加载系统统计
@@ -820,17 +1043,13 @@ async function testOllamaConnection() {
     const ollamaUrl = document.getElementById('ollamaUrl').value;
     
     try {
-        const response = await fetch('/api/ollama/health');
+        const response = await fetch(`${ollamaUrl}/api/tags`);
         const result = await response.json();
         
-        if (result.success) {
-            if (result.data.healthy) {
-                showNotification('Ollama服务连接正常', 'success');
-            } else {
-                showNotification('Ollama服务未运行，但可以使用默认模型', 'warning');
-            }
+        if (result.models && Array.isArray(result.models)) {
+            showNotification('Ollama服务连接正常', 'success');
         } else {
-            showNotification('Ollama服务连接失败', 'error');
+            showNotification('Ollama服务响应格式错误', 'error');
         }
     } catch (error) {
         console.error('测试Ollama连接失败:', error);
@@ -912,4 +1131,9 @@ function closeProgressModal() {
 // 生成唯一ID
 function generateId() {
     return Math.random().toString(36).substr(2, 9);
+}
+
+// 兼容旧的搜索函数名称
+function searchMindmaps() {
+    performSearch();
 }

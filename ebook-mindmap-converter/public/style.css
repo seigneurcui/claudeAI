@@ -347,173 +347,27 @@ body {
     flex-wrap: wrap;
 }
 
-.progress-overview {
-    background: #f7fafc;
-    border-radius: 10px;
-    padding: 20px;
-}
-
 .progress-stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 20px;
-}
-
-.stat-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 15px;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-}
-
-.stat-label {
-    color: #718096;
-    font-weight: 500;
-}
-
-.stat-value {
-    color: #4a5568;
-    font-weight: 600;
-    font-size: 1.2em;
-}
-
-/* 转换列表样式 */
-.conversion-list {
-    margin-top: 20px;
-}
-
-.conversion-item {
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    padding: 20px;
-    margin-bottom: 15px;
-    transition: all 0.3s ease;
-}
-
-.conversion-item:hover {
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-}
-
-.conversion-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-}
-
-.conversion-title {
-    font-weight: 600;
-    color: #4a5568;
-    font-size: 1.1em;
-}
-
-.conversion-status {
-    padding: 5px 15px;
-    border-radius: 20px;
-    font-size: 0.9em;
-    font-weight: 500;
-}
-
-.status-pending {
-    background: #fed7d7;
-    color: #c53030;
-}
-
-.status-uploaded {
-    background: #bee3f8;
-    color: #2b6cb0;
-}
-
-.status-processing {
-    background: #fef5e7;
-    color: #dd6b20;
-}
-
-.status-completed {
-    background: #c6f6d5;
-    color: #2f855a;
-}
-
-.status-failed {
-    background: #fed7d7;
-    color: #c53030;
-}
-
-.conversion-progress {
-    margin-bottom: 15px;
-}
-
-.progress-bar {
-    width: 100%;
-    height: 8px;
-    background: #e2e8f0;
-    border-radius: 4px;
-    overflow: hidden;
-}
-
-.progress-fill {
-    height: 100%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    transition: width 0.3s ease;
-}
-
-.conversion-details {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 15px;
-    margin-bottom: 15px;
-}
-
-.detail-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 10px;
-    background: #f7fafc;
-    border-radius: 5px;
-}
-
-.detail-label {
-    color: #718096;
-    font-size: 0.9em;
-}
-
-.detail-value {
-    color: #4a5568;
-    font-weight: 500;
-}
-
-.conversion-actions {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-/* 思维导图库样式 */
-.mindmap-controls {
-    margin-bottom: 30px;
 }
 
 .search-section {
-    display: flex;
-    gap: 20px;
-    align-items: center;
-    flex-wrap: wrap;
+    margin-bottom: 20px;
 }
 
 .search-group {
     display: flex;
     gap: 10px;
+    align-items: center;
     flex: 1;
     min-width: 300px;
 }
 
 .search-group input {
     flex: 1;
-    padding: 12px 15px;
+    padding: 10px 15px;
     border: 2px solid #e2e8f0;
     border-radius: 8px;
     font-size: 1em;
@@ -531,6 +385,19 @@ body {
 }
 
 .filter-group select {
+    padding: 10px 15px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    background: white;
+}
+
+.per-page-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.per-page-group select {
     padding: 10px 15px;
     border: 2px solid #e2e8f0;
     border-radius: 8px;
@@ -588,6 +455,37 @@ body {
 .mindmap-actions button {
     padding: 8px 15px;
     font-size: 0.9em;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    gap: 5px;
+    margin-top: 20px;
+}
+
+.pagination button {
+    padding: 8px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.pagination button:hover {
+    background: #f7fafc;
+}
+
+.pagination button.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+}
+
+.pagination button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 /* 设置页面样式 */
@@ -856,6 +754,11 @@ body {
         min-width: auto;
     }
     
+    .filter-group {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
     .mindmap-grid {
         grid-template-columns: 1fr;
     }
@@ -898,5 +801,9 @@ body {
     
     .setting-item label {
         min-width: auto;
+    }
+    
+    .pagination {
+        flex-wrap: wrap;
     }
 }
